@@ -1,0 +1,47 @@
+{
+  "POWSP_variant": "Binary: Texas (48) vs Out-of-State (999)",
+  "POWPUMA_top15": [
+    4600,
+    2300,
+    2500,
+    5900,
+    5300,
+    1900,
+    2000,
+    3300,
+    6800,
+    5200,
+    6600,
+    4900,
+    4500,
+    500,
+    3500
+  ],
+  "FOD1P_method": "2-digit CIP prefix (val // 100)",
+  "MARHYP_nonuniform_bins": {
+    "0": "Never Married (MAR=5)",
+    "1": "1 year (2017-2018)",
+    "2": "2-3 years (2015-2016)",
+    "3": "4-5 years (2013-2014)",
+    "4": "6-10 years (2008-2012)",
+    "5": "11-15 years (2003-2007)",
+    "6": "16-20 years (1998-2002)",
+    "7": "21-25 years (1993-1997)",
+    "8": "26-30 years (1988-1992)",
+    "9": "31-35 years (1983-1987)",
+    "10": "36-40 years (1978-1982)",
+    "11": "41-45 years (1973-1977)",
+    "12": "46+ years (<1973)"
+  },
+  "cols_grouped_tier1": [
+    "POWPUMA",
+    "POWSP",
+    "FOD1P",
+    "MARHYP"
+  ],
+  "cols_kept_raw_tier1": [
+    "OCCP",
+    "INDP",
+    "ANC1P"
+  ]
+}

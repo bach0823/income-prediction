@@ -1,0 +1,43 @@
+usage: train_models.py [-h] [--data-dir DATA_DIR]
+                       [--output-dir OUTPUT_DIR]
+                       [--model {both,cart,randomforest}]
+                       [--variant {both,A_detailed,B_grouped}]
+                       [--cv CV] [--jobs JOBS] [--seed SEED]
+                       [--quick]
+
+Huấn luyện CART/Random Forest trên A/B. Chạy: python
+train_models.py Chạy thử luồng với ít dữ liệu: python
+train_models.py --quick Không tính lại nhãn, không chia lại
+train/test và không thay đổi dữ liệu đã chuẩn bị.
+
+options:
+  -h, --help            show this help message and exit
+  --data-dir DATA_DIR
+  --output-dir OUTPUT_DIR
+  --model {both,cart,randomforest}
+  --variant {both,A_detailed,B_grouped}
+  --cv CV
+  --jobs JOBS           Số luồng RF; -1 dùng các lõi khả
+                        dụng, 1 giảm tải máy
+  --seed SEED
+  --quick               Chạy thử ít dữ liệu, KHÔNG dùng kết
+                        quả cho báo cáo
+
+
+Cách chạy
+Chạy đầy đủ cả bốn tổ hợp:
+python train_models.py
+Chạy riêng từng mô hình:
+python train_models.py --model cart
+python train_models.py --model randomforest
+Chạy thử nhanh:
+python train_models.py --quick --jobs 2
+File dùng CV 3 folds trên train để chọn tham số theo Macro-F1, sau đó đánh giá trên test. Không chia lại dữ liệu hoặc tính lại nhãn.
+Kết quả xuất ra
+Trong Project/data/results/cart_randomforest/:
+comparison.csv: bảng so sánh.
+ket_qua_mo_hinh.txt: kết quả và giải thích dùng viết báo cáo.
+Báo cáo từng lớp, ma trận nhầm lẫn, feature importance và dự đoán.
+Mô hình đã huấn luyện dạng .joblib.
+Hướng dẫn chi tiết: Project/ghi_chu_chay_mo_hinh.txt.
+Đã kiểm chứng: 35 kiểm thử đạt và chạy thử thành công cả bốn tổ hợp. Chưa chạy huấn luyện đầy đủ; kết quả --quick được lưu riêng và không dùng làm số liệu bài nộp.

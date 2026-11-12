@@ -1,0 +1,58 @@
+HƯỚNG DẪN CHẠY VÀ TRÌNH BÀY CART / RANDOM FOREST
+
+1. File chạy
+- train_models.py đọc dữ liệu đã chuẩn bị trong data/processed/texas_2024/.
+- Nếu chưa có CSV hoặc vừa đổi thuộc tính, chạy: python data_prepareration.py 2024
+- Chạy đủ bốn ô thí nghiệm: python train_models.py
+- Chỉ CART: python train_models.py --model cart
+- Chỉ Random Forest: python train_models.py --model randomforest
+- Chỉ một phiên bản: python train_models.py --variant B_grouped
+- Giảm tải máy: thêm --jobs 1. Mặc định --jobs -1 cho RF dùng các lõi khả dụng.
+- CV mặc định 3 folds, seed mặc định 42; có thể đổi bằng --cv và --seed.
+- Chạy thử để kiểm tra luồng: python train_models.py --quick
+- Quick chỉ dùng tối đa 3000 dòng train và 1000 dòng test, RF 20 cây; kết quả KHÔNG dùng làm kết quả bài nộp.
+- Chạy đầy đủ tốn thời gian hơn vì mỗi tổ hợp tham số được fit 3 folds rồi refit. Chương trình không chạy ngầm và không cần Weka.
+
+2. Thiết kế so sánh
+- A_detailed: nghề, ngành kinh tế và ngành học giữ mã chi tiết.
+- B_grouped: ba cột được tổng quát hóa theo quy tắc đã chốt.
+- CART và Random Forest dùng đúng train/test, nhãn tam phân vị và cột CIT đã xuất. Không tính lại ngưỡng thu nhập và không chia lại dữ liệu.
+- Nhãn 0 = Thấp, 1 = Trung bình, 2 = Cao. Cả hai phiên bản có 14 thuộc tính đầu vào; PERNP và ID không được đưa vào mô hình.
+- Hai mô hình đều dùng Gini và mã số; không tự chuyển sang ID3/J48, không one-hot/target encoding.
+
+3. Chọn tham số CHỈ bằng train
+- GridSearchCV tối ưu f1_macro, dùng StratifiedKFold shuffle=True seed=42 trên train. Phân tầng CV ở đây hợp lệ vì nhãn train đã xác định từ giai đoạn chuẩn bị.
+- CART: max_depth thuộc {12, không giới hạn}; min_samples_leaf thuộc {20, 100}. Đây là kiểm soát độ phức tạp/tiền cắt tỉa, không phải triển khai tìm ccp_alpha.
+- Random Forest: n_estimators thuộc {100, 200}; min_samples_leaf thuộc {5, 20}; max_features='sqrt'; max_depth không giới hạn; bootstrap mặc định True.
+- Mỗi mô hình/phiên bản có 4 ứng viên x 3 folds + 1 refit tốt nhất. Toàn bộ bốn ô là 52 lần fit estimator; mỗi fit RF chứa nhiều cây.
+- Không làm song song cả GridSearch và RF để tránh lồng quá nhiều worker: GridSearch tuần tự, RF dùng --jobs.
+- Cùng ngân sách ứng viên không đồng nghĩa cùng chi phí tính toán; cần báo thời gian.
+- Đề xuất mô hình/phiên bản dựa trên điểm CV train, không chọn lại theo điểm test. Nếu chỉ chạy một phần, đề xuất chỉ trong các ô đã chạy.
+
+4. Độ đo và cách đọc
+- Accuracy: tỷ lệ phân lớp đúng.
+- Macro-Precision, Macro-Recall, Macro-F1: tính từng lớp rồi lấy trung bình đều. Macro-F1 là độ đo chính đã chọn trước.
+- Có điểm train và test để khảo sát quá khớp; chênh lệch lớn là dấu hiệu cần thảo luận, không phải bằng chứng duy nhất.
+- Có trung bình và độ lệch chuẩn CV Macro-F1 của ứng viên tốt nhất. Đây không phải khoảng tin cậy thống kê trên test.
+- Ma trận nhầm lẫn: HÀNG là nhãn thật, CỘT là nhãn dự đoán theo thứ tự Thấp/Trung bình/Cao.
+- Baseline luôn dự đoán lớp đông nhất train; dùng để biết mô hình có cải thiện so với cách đoán đơn giản không.
+- search_and_refit_seconds bao gồm toàn bộ tìm kiếm CV và refit; test_predict_seconds chỉ đo dự đoán test. Không gọi thời gian tìm kiếm là thời gian fit một cây.
+- Feature importance là mức giảm impurity, có thể thiên về biến nhiều giá trị; không dùng để kết luận nguyên nhân làm tăng thu nhập.
+- Mã danh mục được chia theo ngưỡng số, không phải nominal native; ghi đây là hạn chế của biểu diễn trong Python/scikit-learn.
+
+5. File đầu ra
+- Chạy đầy đủ: data/results/cart_randomforest/.
+- Chạy quick: data/results/cart_randomforest_quick/, tách riêng để không nhầm kết quả bài nộp.
+- comparison.csv: bảng so sánh các ô vừa chạy (Accuracy, Macro-F1, CV, thời gian, tham số).
+- results.json: cấu hình chạy, phiên bản thư viện, metadata dữ liệu, baseline, kết quả từng mô hình và lựa chọn theo CV.
+- ket_qua_mo_hinh.txt: kết quả thực tế kèm giải thích để lấy nội dung viết báo cáo.
+- Mỗi ô có *_cv.csv (toàn bộ ứng viên), *_classification_report.csv (độ đo từng lớp), *_confusion_matrix.csv, *_feature_importances.csv và *_predictions.csv.
+- *.joblib: mô hình đã refit trên train, không fit bằng test. Chỉ load file tin cậy vì joblib/pickle có khả năng thực thi mã.
+- Dự đoán sau này phải dùng đúng cách biến đổi A/B và thứ tự cột trong metadata; mô hình không chứa bước làm sạch/gom nhóm.
+- Chạy lại cùng output sẽ cập nhật file kết quả; comparison.csv/results.json/txt chỉ phản ánh các ô của lần chạy đó. Các file từng ô cũ khác có thể vẫn còn, không trộn chúng vào bảng mới.
+
+6. Giới hạn của kết quả
+- Không tự bảo đảm RF tốt hơn CART hoặc gom nhóm tốt hơn giữ chi tiết; kết luận dựa vào bảng chạy đầy đủ.
+- Không dùng số liệu quick làm số liệu thí nghiệm đầy đủ.
+- Sau khi nhìn test, không tiếp tục điều chỉnh tham số theo test để làm đẹp báo cáo.
+- Dữ liệu là mẫu đã chọn đối tượng, nhãn tương đối theo tam phân vị train không trọng số; không diễn giải thành chuẩn thu nhập của toàn bộ Texas.

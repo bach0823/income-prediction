@@ -1,0 +1,62 @@
+GHI CHÚ QUYẾT ĐỊNH XỬ LÝ NHIỄU VÀ PHẠM VI NGHIÊN CỨU
+
+1. Phạm vi thay đổi
+- Sửa kiểm tra nhiễu trong data_prepareration.py; không thêm encoding hay huấn luyện mô hình.
+- Kiểm tra trước bước điền khuyết. Mã 0 tự tạo cho ENG/FOD1P không phải mã trong dữ liệu PUMS gốc.
+- Đọc từ điển CSV có sẵn, đúng năm được truyền vào pipeline; không tải mạng và không âm thầm dùng từ điển năm khác.
+- Nếu không có từ điển/cột cần thiết, hoặc tập dữ liệu rỗng, báo lỗi rõ ràng.
+
+2. Vì sao tiếp tục loại COW == 8?
+- Giữ quyết định của người thực hiện đề tài: nhóm lao động gia đình không hưởng lương nằm ngoài phạm vi mô hình nghiên cứu thu nhập lao động này.
+- Đây là tiêu chí chọn đối tượng, không phải bằng chứng bản ghi sai.
+- Không suy luận COW == 8 bắt buộc PERNP == 0. PERNP bao gồm thu nhập tiền công và tự doanh trong 12 tháng; loại công việc COW không nhất thiết đại diện cho mọi công việc trong cả giai đoạn đó. Chuyển việc hoặc có nhiều công việc có thể tạo ra tổ hợp này.
+- Chưa kiểm tra riêng WAGP/SEMP hay lịch sử công việc của 470 người bị loại, nên không kết luận nguồn thu nhập cụ thể của họ.
+- Không tự sửa PERNP thành 0 hay suy diễn thu nhập của nhóm này.
+- Hệ quả: kết quả chỉ áp dụng cho cohort đã chọn, không đại diện mọi người trưởng thành hay toàn bộ người lao động Texas.
+
+3. Phân biệt phạm vi nghiên cứu và nhiễu
+- Hiện dùng bốn điều kiện chọn bản ghi: AGEP >= 18, WKHP > 0, PERNP > 0, COW != 8. Đã bỏ quy tắc 9920 riêng vì không loại thêm dòng nào trên dữ liệu Texas 2024 sau bốn điều kiện này.
+- WKHP > 0 mô tả giờ làm trong 12 tháng qua, không chứng minh hiện tại đang có việc làm.
+- Các điều kiện loại trừ có thể chồng lấn; không cộng số dòng riêng lẻ để suy ra tổng số dòng bị loại.
+
+4. Kiểm tra miền giá trị thực sự
+- Đọc từng mã hoặc khoảng mã trong các dòng VAL của PUMS Data Dictionary.
+- Đối chiếu cả FOD1P, OCCP, INDP với danh sách mã, không chỉ xem min/max rồi khẳng định hợp lệ.
+- Kiểm tra tính nguyên trước khi chuyển kiểu: ví dụ SEX = 1.5 không được âm thầm đổi thành 1.
+- Phát hiện mã ngoài từ điển, chuỗi không chuyển được thành số và giá trị vô cực.
+- Báo riêng số ô sai và số dòng có lỗi, kèm ví dụ; kết luận dựa trên kết quả kiểm tra, không in cố định '0 mã rác'.
+- Missing không được coi là mã sai; báo số lượng để chuyển sang bước xử lý khuyết thiếu hiện có. Kiểm tra miền không thay thế kiểm tra ngữ nghĩa của missing.
+- Khi phát hiện sai miền/kiểu hoặc còn dòng ngoài cohort, dừng pipeline bằng ValueError để điều tra. Không tự xóa hay chia bins để che lỗi.
+
+5. Miền PUMS khác với giới hạn vật lý
+- AGEP theo từ điển 2024 là 0..99; điều kiện người trưởng thành được kiểm tra riêng bằng AGEP >= 18. Không dùng 115 làm giới hạn mã.
+- WKHP có mã 1..99; 99 nghĩa là 99 giờ trở lên. Không dùng 168 giờ làm giới hạn hợp lệ của cột PUMS.
+- WKWN là số tuần thực tế 1..52.
+- WKW trong bản 2018 là mã nhóm 1..6, không phải số tuần. Được kiểm tra như biến phân loại với từ điển 2018.
+- PERNP cũng được kiểm tra theo các khoảng mã trong từ điển đúng năm.
+
+6. Vì sao giữ các giá trị cực đoan hợp lệ?
+- Tuổi cao, giờ làm dài và thu nhập rất cao/thấp chưa đủ căn cứ để gọi là dữ liệu sai.
+- Tiếp tục thống kê AGEP >= 85, WKHP > 84, WKHP == 99, 0 < PERNP <= 100 và PERNP > 500000 để khảo sát; đây không phải ngưỡng xóa.
+- Top-coding là biện pháp bảo vệ riêng tư, không chứng nhận mọi giá trị đều chính xác.
+- Không bắt buộc chia bins tuổi/giờ làm. Binning giảm độ chi tiết, không chứng minh đã loại nhiễu.
+- Không cắt đuôi thu nhập bằng IQR hoặc winsorization chỉ để làm đẹp phân phối trước khi tạo nhãn tam phân vị.
+
+7. Kết quả tham chiếu trên file Texas 2024 hiện có
+Nguồn: data/pums/2024/1-Year/psam_p48.csv
+Từ điển: data/pums/data_dict_2024/PUMS_Data_Dictionary_2024.csv
+- Ban đầu: 292272 dòng.
+- Sau AGEP >= 18, WKHP > 0, PERNP > 0: 146745 dòng.
+- Loại thêm 470 người COW == 8 trong cohort cơ bản; sau toàn bộ bộ lọc: 146275 dòng.
+- OCCP: 529 mã; INDP: 263 mã; FOD1P: 174 mã không khuyết.
+- Không phát hiện giá trị không khuyết ngoài miền từ điển trên 14 cột đã kiểm tra.
+- Những số này là kết quả quan sát file hiện có, không được hard-code làm kết luận trong chương trình.
+
+8. Hướng tạo nhãn (đã triển khai trong bước biến đổi tiếp theo)
+- Xem ghi_chu_bien_doi_du_lieu.txt và data/processed/texas_2024/ket_qua_bien_doi.txt để lấy quy trình và kết quả mới nhất.
+- Dùng tam phân vị PERNP để tạo ba lớp thu nhập thấp/trung bình/cao tương đối trong cohort.
+- Khuyến nghị chia train/test trước, tính hai ngưỡng trên train và dùng cùng ngưỡng cho cả train/test. Không tính riêng tam phân vị trên test.
+- Không tách những người có cùng PERNP sang hai nhãn chỉ để đủ chính xác 1/3. Kích thước ba lớp có thể khác nhau vì đồng hạng.
+- Loại PERNP khỏi đầu vào sau khi tạo nhãn để tránh rò rỉ đáp án.
+- Tam phân vị mẫu không trọng số không phải tam phân vị dân số Texas; muốn diễn giải dân số cần cân nhắc trọng số khảo sát.
+- Không thêm target encoding hay one-hot encoding theo yêu cầu. Cách khai báo biến nominal phụ thuộc công cụ huấn luyện; scikit-learn CART/Random Forest không tự hiểu mã nghề nguyên là nominal.

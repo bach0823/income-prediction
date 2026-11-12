@@ -1,0 +1,28 @@
+KẾT QUẢ BIẾN ĐỔI DỮ LIỆU TEXAS 2024 — II.3 VÀ II.4
+Tổng bản ghi sau làm sạch: 146,275
+II.3: A giữ mã chi tiết; B gom OCCP/INDP theo tiền tố nhãn từ điển, FOD1P theo mã // 100.
+Cả A và B có ANNUAL_HOURS = WKHP * WKWN, là số giờ làm ước tính trong năm.
+Không chia bins tuổi/giờ/tuần, không chuẩn hóa, không one-hot/target encoding.
+scikit-learn xử lý mã nguyên bằng ngưỡng số, không phải phép chia nominal theo tập con.
+II.4: Xáo trộn ngẫu nhiên 70/30 trước khi tính ngưỡng; không phân tầng theo nhãn chưa tồn tại.
+Seed: 42; tam phân vị chỉ tính trên train (nội suy tuyến tính mặc định pandas).
+Ngưỡng: q1 = 30,000.00; q2 = 66,000.00
+Nhãn 0 (Thấp): PERNP <= q1; 1 (Trung bình): q1 < PERNP <= q2; 2 (Cao): PERNP > q2.
+Giữ người cùng thu nhập cùng nhãn; không ép số lượng ba lớp bằng nhau.
+Đây là tam phân vị mẫu không trọng số, không phải ngưỡng thu nhập dân số Texas.
+PERNP không xuất vào X; y và ID vị trí dòng được lưu riêng. A/B có cùng dòng, thứ tự và nhãn.
+train: 102,392 dòng
+  0 (Thấp): 36,268 (35.42%)
+  1 (Trung bình): 32,035 (31.29%)
+  2 (Cao): 34,089 (33.29%)
+test: 43,883 dòng
+  0 (Thấp): 15,722 (35.83%)
+  1 (Trung bình): 13,679 (31.17%)
+  2 (Cao): 14,482 (33.00%)
+Số nhóm quan sát: {'OCCP': 25, 'INDP': 18, 'FOD1P': 38}
+Kiểm chứng ánh xạ: mỗi mã từ điển chỉ có một nhóm, mã lạ gây lỗi thay vì tự gán nhóm khác.
+FOD1P_GROUP = 0 là chưa có bằng cử nhân; 37 nhóm ngành + nhóm 0 trên dữ liệu hiện có.
+mapping_*.csv chứa từng mã, nhãn gốc, khóa nhóm và mã nhóm để đối chiếu/trình bày phụ lục.
+feature_domains.csv chứa miền giá trị quan sát; không được dùng min/max này làm quy tắc học từ test.
+rows_*.csv là vị trí 0-based sau làm sạch, không phải ID Census, không đưa vào mô hình.
+Chỉ chuẩn bị dữ liệu; chưa có kết quả CART/RF. Tinh chỉnh trên train/CV, test dành đánh giá cuối.

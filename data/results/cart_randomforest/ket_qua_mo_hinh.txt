@@ -1,0 +1,17 @@
+KẾT QUẢ CART / RANDOM FOREST — THỰC NGHIỆM ĐẦY ĐỦ
+A: mã chi tiết; B: gom nhóm. Đọc nhãn/ngưỡng và train/test đã lưu, không tính lại.
+Train sử dụng: 102,392; test sử dụng: 43,883; seed=42; CV=3 folds.
+Chọn siêu tham số bằng StratifiedKFold chỉ trên train, tối ưu Macro-F1; refit trên train.
+Đánh giá test sau khi chốt tham số; không dùng test để điều chỉnh mô hình.
+Thời gian tìm kiếm bao gồm các lượt CV và refit, không chỉ một lần fit.
+Ma trận nhầm lẫn: hàng là nhãn thật, cột là nhãn dự đoán (Thấp, Trung bình, Cao).
+Importance là mức giảm impurity, có thể thiên về biến nhiều giá trị; không chứng minh quan hệ nhân quả.
+Mã CIT/nghề/ngành được xử lý bằng ngưỡng số; không phải hỗ trợ nominal trực tiếp.
+Baseline luôn đoán lớp phổ biến nhất train (0): Accuracy=0.3583, Macro-F1=0.1758.
+   variant        model  cv_macro_f1  train_macro_f1  test_accuracy  test_macro_f1
+A_detailed         CART     0.673902        0.690263       0.679306       0.673813
+A_detailed RandomForest     0.695527        0.802533       0.701479       0.698193
+ B_grouped         CART     0.671626        0.686165       0.675250       0.670651
+ B_grouped RandomForest     0.690891        0.784096       0.695919       0.692684
+Ưu tiên theo CV (không chọn theo test): A_detailed / RandomForest.
+Đọc mô hình bằng joblib.load chỉ với file tin cậy; dùng đúng thứ tự cột trong metadata.

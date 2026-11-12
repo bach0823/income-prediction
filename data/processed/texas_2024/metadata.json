@@ -1,0 +1,83 @@
+{
+  "survey_year": "2024",
+  "state": "TX",
+  "rows": 146275,
+  "random_state": 42,
+  "requested_test_size": 0.3,
+  "split_method": "random shuffle before fitting tertiles; no stratification",
+  "thresholds_train_only": {
+    "q1": 30000.0,
+    "q2": 66000.0
+  },
+  "label_names": {
+    "0": "Thấp",
+    "1": "Trung bình",
+    "2": "Cao"
+  },
+  "label_rule": "0: PERNP <= q1; 1: q1 < PERNP <= q2; 2: PERNP > q2",
+  "annual_hours": "WKHP * WKWN (estimate; WKHP 99 means 99 or more)",
+  "encoding": "integer codes; no native nominal handling, one-hot or target encoding",
+  "variants": {
+    "A_detailed": {
+      "features": [
+        "AGEP",
+        "SEX",
+        "MAR",
+        "ENG",
+        "SCHL",
+        "FOD1P",
+        "COW",
+        "WKWN",
+        "WKHP",
+        "OCCP",
+        "INDP",
+        "RAC1P",
+        "CIT",
+        "ANNUAL_HOURS"
+      ],
+      "feature_count": 14
+    },
+    "B_grouped": {
+      "features": [
+        "AGEP",
+        "SEX",
+        "MAR",
+        "ENG",
+        "SCHL",
+        "FOD1P_GROUP",
+        "COW",
+        "WKWN",
+        "WKHP",
+        "OCCP_GROUP",
+        "INDP_GROUP",
+        "RAC1P",
+        "CIT",
+        "ANNUAL_HOURS"
+      ],
+      "feature_count": 14
+    }
+  },
+  "splits": {
+    "train": {
+      "rows": 102392,
+      "class_counts": {
+        "0": 36268,
+        "1": 32035,
+        "2": 34089
+      }
+    },
+    "test": {
+      "rows": 43883,
+      "class_counts": {
+        "0": 15722,
+        "1": 13679,
+        "2": 14482
+      }
+    }
+  },
+  "observed_groups": {
+    "OCCP": 25,
+    "INDP": 18,
+    "FOD1P": 38
+  }
+}

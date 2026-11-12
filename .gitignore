@@ -1,0 +1,13 @@
+# Python cache
+__pycache__/
+*.pyc
+# Dataset thô và file nén (kích thước lớn: psam_p48.csv ~180-196MB, zip ~45-50MB)
+data/pums/**/psam_p48.csv
+data/pums/**/*.zip
+*.zip
+*.rar
+# Dữ liệu trung gian sau tiền xử lý (các file .csv dung lượng lớn)
+data/processed/**/*.csv
+# File trọng số model đã huấn luyện 
+data/results/**/*.joblib
+*.joblib

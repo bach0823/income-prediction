@@ -1,0 +1,96 @@
+GHI CHÚ TRÌNH BÀY BÁO CÁO: BIẾN ĐỔI DỮ LIỆU VÀ PHÂN CHIA TRAIN/TEST
+
+1. Phân biệt các mục trong mẫu giảng viên
+- II.1.3 (Biến đổi dữ liệu/chuẩn hóa): giới thiệu khái niệm và các kỹ thuật tiền xử lý. Không phải chỗ mô tả toàn bộ thí nghiệm A/B.
+- II.2 (Phân tích dữ liệu): thống kê mô tả, quan hệ của thuộc tính với PERNP để hiểu dữ liệu. Không tuyên bố có biểu đồ nếu chưa tạo.
+- II.3 (Biến đổi dữ liệu): trình bày những biến đổi thật sự áp dụng: xây dựng ANNUAL_HOURS, gom nhóm ở bản B, biểu diễn mã số, quy tắc rời rạc hóa PERNP thành nhãn và bảng miền giá trị.
+- II.4 (Phân tách dữ liệu): trình bày seed, chia 70/30, ngưỡng tam phân vị chỉ học trên train và số lượng từng lớp. Dù báo cáo mô tả quy tắc nhãn ở II.3, thực thi phải chia train/test trước khi tính hai ngưỡng.
+- Không bắt chước máy móc phép nhân hoặc chia bins trong bài ô tô. Chỉ làm phép biến đổi có ý nghĩa cho dữ liệu thu nhập.
+
+2. Đầu vào và phạm vi
+- Chạy toàn bộ bằng: python data_prepareration.py 2024
+- Phần biến đổi nằm ở data_transformation.py, được gọi sau làm sạch và điền khuyết.
+- Chọn bản ghi theo bốn điều kiện: AGEP >= 18, WKHP > 0, PERNP > 0, COW != 8. COW == 8 được loại theo phạm vi đề tài, không coi là bằng chứng bản ghi sai.
+- Bỏ điều kiện loại 9920 riêng vì không loại thêm dòng nào trên dữ liệu Texas 2024 sau bốn điều kiện trên. Từ điển ánh xạ vẫn giữ 9920 thành nhóm đặc biệt riêng, không gán vào nghề/ngành khác.
+- Dữ liệu hiện có: 146275 dòng sau chọn bản ghi. Không suy rộng kết quả thành toàn bộ dân số Texas.
+- Biến đổi A/B này chỉ triển khai cho bản 2024 có WKWN là số tuần thực tế. Không lấy WKW (mã nhóm số tuần của 2018) nhân với WKHP.
+
+3. Các biến giữ nguyên và các kỹ thuật không áp dụng
+- Giữ AGEP, WKHP, WKWN dạng số, không chia bins để tránh mất thông tin và làm tăng các tổ hợp đặc trưng giống hệt nhau nhưng khác nhãn.
+- Giữ SCHL và ENG theo mã hiện có; ENG = 0 nghĩa là chỉ nói tiếng Anh trong phạm vi người trưởng thành, không có nghĩa chắc chắn là người bản ngữ.
+- Giữ SEX, MAR, COW, RAC1P, CIT dưới dạng mã nguyên.
+- Thay thuộc tính NATIVITY (nguồn gốc sinh bản địa/nước ngoài) bằng CIT (tình trạng quốc tịch). Đọc trực tiếp CIT từ dữ liệu gốc, không đổi tên hoặc suy ra CIT từ NATIVITY.
+- CIT theo từ điển PUMS 2024: 1 = sinh tại Hoa Kỳ; 2 = sinh tại Puerto Rico, Guam, Quần đảo Virgin thuộc Mỹ hoặc Bắc Mariana; 3 = sinh ở nước ngoài có cha/mẹ là công dân Hoa Kỳ; 4 = công dân Hoa Kỳ qua nhập tịch; 5 = không phải công dân Hoa Kỳ.
+- CIT vẫn là biến danh mục, không phải thang thứ bậc. Giữ mã 1..5 theo lựa chọn mã hóa số đã thống nhất; không gộp hoặc one-hot. Việc thay này không đổi điều kiện chọn bản ghi, cách chia train/test hay nhãn.
+- Không chuẩn hóa Min-Max/Z-score vì cây tìm ngưỡng, không dựa trên khoảng cách Euclid.
+- Không dùng PCA, one-hot encoding, target encoding hoặc gom nhóm theo thu nhập.
+- Không cắt đuôi PERNP, không xóa các giá trị cực đoan hợp lệ trước khi tạo nhãn.
+
+4. Xây dựng thuộc tính: ANNUAL_HOURS
+- Công thức: ANNUAL_HOURS = WKHP * WKWN.
+- Ý nghĩa: số giờ làm ước tính trong năm từ số giờ làm thông thường mỗi tuần và số tuần làm trong 12 tháng.
+- Đây không phải tổng giờ chính xác: số giờ có thể thay đổi theo tuần; WKHP == 99 là 99 giờ trở lên, đã top-code.
+- Dùng cùng thuộc tính này trong cả A và B để chỉ so sánh khác biệt độ chi tiết của OCCP/INDP/FOD1P.
+- Vẫn giữ WKHP và WKWN; tích có thể giúp cây biểu diễn quan hệ tương tác mà một ngưỡng trên từng biến khó diễn tả.
+- Không sử dụng PERNP hay tính thu nhập theo giờ để tạo đặc trưng, tránh rò rỉ đáp án.
+
+5. Hai phiên bản dữ liệu
+A_detailed:
+- Giữ OCCP, INDP, FOD1P ở cấp mã chi tiết.
+- FOD1P = 0 là chưa có bằng cử nhân (đã điền từ bước xử lý missing).
+B_grouped:
+- Thay ba cột chi tiết bằng OCCP_GROUP, INDP_GROUP, FOD1P_GROUP, không giữ cả hai cấp song song.
+- Mọi biến khác và ANNUAL_HOURS giống A.
+- Cả hai có 14 thuộc tính đầu vào; PERNP đã bị loại khỏi X.
+- Dự kiến thí nghiệm 2 x 2: CART-A, CART-B, RandomForest-A, RandomForest-B. Chưa huấn luyện trong lần triển khai này.
+
+6. Cách gom OCCP và INDP
+- Đọc từng dòng VAL của đúng từ điển PUMS 2024.
+- Lấy tiền tố trước dấu '-' trong nhãn: ví dụ OCCP 0010 = MGR-Chief Executives And Legislators -> MGR; INDP 0170 = AGR-Crop Production -> AGR.
+- Nhóm nghề và nhóm ngành là hai bảng ánh xạ khác nhau, kể cả khi có cùng tiền tố.
+- OCCP: 25 nhóm quan sát (MGR, BUS, FIN, CMM, ENG, SCI, CMS, LGL, EDU, ENT, MED, HLS, PRT, EAT, CLN, PRS, SAL, OFF, FFF, CON, EXT, RPR, PRD, TRN, MIL).
+- INDP: 18 nhóm quan sát (AGR, EXT, UTL, CON, MFG, WHL, RET, TRN, INF, FIN, PRF, EDU, MED, SCA, ENT, SRV, ADM, MIL).
+- Không diễn giải INDP FIN chỉ là tài chính: nhóm còn có bảo hiểm, bất động sản và cho thuê. PRF cũng gồm nhiều dịch vụ kinh doanh, không chỉ một nghề chuyên môn.
+- Mã nhóm số được đánh theo mã chi tiết nhỏ nhất trong nhóm, trên từ điển đầy đủ. Không thay thứ tự theo tần suất hoặc thu nhập.
+- Không suy ra mọi số trong khoảng min/max của nhóm đều là mã hợp lệ. Ánh xạ dùng đúng từng mã trong từ điển.
+- Kết quả kiểm tra: mã không trùng; mỗi mã chỉ có một nhóm; các khoảng nhóm không đè nhau. Trên dữ liệu đã chọn không có mã thiếu ánh xạ.
+- Không thêm SOC minor group hay NAICS subsector để giữ một quy trình đơn giản, dễ trình bày; không tuyên bố cách gom này là tối ưu.
+
+7. Cách gom FOD1P
+- Công thức cho mã hợp lệ: FOD1P_GROUP = FOD1P // 100; nhóm 0 được giữ riêng.
+- Có 37 nhóm ngành + nhóm 0 trên dữ liệu hiện có, tổng 38 nhóm.
+- Ví dụ: 2102 Computer Science -> 21; 2407 Computer Engineering -> 24; 6107 Nursing -> 61; 6201 Accounting -> 62.
+- 4009 Data Science and Data Analytics -> 40 (đa/liên ngành), KHÔNG tự chuyển sang nhóm 21 vì thấy có từ 'Data'.
+- Các nhóm rộng hoặc có ngành giao thoa là sự đánh đổi khi tổng quát hóa, không tự đổi mã theo trực giác.
+- Đây là gom theo tiền tố hai chữ số của mã FOD1P, không gọi là bảng phân nhóm CIP chính thức hay khẳng định khớp hoàn toàn với hệ CIP.
+- Nhóm nhỏ như 38 (5 dòng), 57 (15), 51 (19), 35 (23), 22 (24) được giữ riêng; không gộp tùy tiện thành 'Other'.
+- Tên tiếng Việt nhóm là diễn giải dùng cho báo cáo; nhãn tiếng Anh gốc được giữ trong mapping_FOD1P.csv để đối chiếu.
+
+8. Lưu ý quan trọng về Python/scikit-learn
+- Môi trường đã kiểm tra có scikit-learn 1.9.1. CART và RF ở đây xử lý mã số bằng phép chia theo ngưỡng, không tự chia tập con danh mục theo nghĩa nominal gốc.
+- Mã nghề/ngành có cấu trúc nhóm liên tiếp nhưng KHÔNG phải thang đo thứ bậc thực sự. Không suy luận mã lớn nghĩa là chuyên môn/thu nhập cao.
+- Đây là lựa chọn mã hóa số có hạn chế để đáp ứng yêu cầu không one-hot/target encoding và giữ quy trình đơn giản. Áp dụng giống nhau cho cả hai mô hình.
+- Vì vậy không nên viết 'CART không xử lý được hơn 500 mã' hay 'gom nhóm chắc chắn cải thiện'. Cần bảng đánh giá 2 x 2 sau huấn luyện để kết luận.
+
+9. Chia dữ liệu và tạo nhãn
+- Chỉ một lần chia ngẫu nhiên, shuffle=True, test_size=0.30, random_state=42; cùng vị trí dòng và thứ tự cho A/B.
+- ĐÍNH CHÍNH kế hoạch trước: KHÔNG phân tầng theo nhãn cuối cùng, vì nhãn chưa tồn tại trước khi học ngưỡng trên train. Không dùng tam phân vị toàn bộ dữ liệu để phân tầng rồi lại nói rằng test không tham gia xác định nhãn.
+- Tính q1 = phân vị 1/3, q2 = phân vị 2/3 của PERNP trên train, nội suy tuyến tính mặc định pandas.
+- Dùng nguyên hai ngưỡng gán nhãn cho cả train và test: 0 (Thấp) nếu PERNP <= q1; 1 (Trung bình) nếu q1 < PERNP <= q2; 2 (Cao) nếu PERNP > q2.
+- Không tính lại tam phân vị trên test, không tách người cùng thu nhập thành hai nhãn để đủ số lượng 1/3.
+- Nếu hai ngưỡng bằng nhau hoặc train không tạo đủ ba lớp, báo lỗi để kiểm tra thay vì âm thầm bỏ lớp.
+- Các mức là tương đối theo mẫu train không trọng số, không phải chuẩn nghèo hoặc ngưỡng thu nhập chính thức.
+- PERNP chỉ tạo nhãn; không nằm trong X. ID vị trí dòng và y lưu riêng, không đưa vào mô hình.
+- Nhóm có từ điển cố định có thể xuất hiện trên test dù vắng trên train; không được sắp lại mã theo tập quan sát.
+
+10. File kết quả và cách dùng khi viết báo cáo
+Thư mục: data/processed/texas_2024/ (không ghi đè mappings.json cũ).
+- X_A_detailed_train.csv, X_A_detailed_test.csv: đầu vào bản chi tiết.
+- X_B_grouped_train.csv, X_B_grouped_test.csv: đầu vào bản gom nhóm.
+- y_train.csv, y_test.csv: một cột INCOME_CLASS, dùng chung cho A/B theo đúng thứ tự dòng X.
+- rows_train.csv, rows_test.csv: vị trí 0-based sau làm sạch để kiểm tra hai phiên bản dùng cùng bản ghi; không phải ID gốc Census.
+- mapping_OCCP.csv, mapping_INDP.csv, mapping_FOD1P.csv: toàn bộ mã/nhãn gốc/khóa nhóm/mã nhóm. Có thể đưa vào phụ lục hoặc chọn ví dụ minh họa cho II.3.
+- feature_domains.csv: min, max, số giá trị khác nhau của 14 thuộc tính trên mỗi phiên bản; dùng lập bảng miền giá trị quan sát, không phải bảng kiểm tra miền mã hợp lệ.
+- metadata.json: cấu hình, danh sách cột, ngưỡng train, số dòng và số nhãn từng tập.
+- ket_qua_bien_doi.txt: ghi chú KẾT QUẢ THỰC TẾ được tạo lại mỗi lần chạy; lấy số dòng/ngưỡng/tỷ lệ lớp từ file này, không chép các số khảo sát cũ vào kết quả chính thức.
+- Tinh chỉnh/cắt tỉa CART và tham số RF chỉ bằng train/CV; test dùng đánh giá cuối. Không gọi mức độ trùng vector là độ chính xác kiểm thử hoặc bằng chứng RF tốt hơn.

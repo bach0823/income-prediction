@@ -1,0 +1,310 @@
+"""II.3–II.4: biến đổi ACS PUMS Texas 2024 và chuẩn bị so sánh CART/RF.
+
+Không huấn luyện mô hình. Các phép gom nhóm chỉ dựa vào từ điển, không dùng nhãn.
+Gọi qua: python data_prepareration.py 2024
+"""
+
+import csv
+import json
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+
+BASE_FEATURES = [
+    "AGEP",
+    "SEX",
+    "MAR",
+    "ENG",
+    "SCHL",
+    "FOD1P",
+    "COW",
+    "WKWN",
+    "WKHP",
+    "OCCP",
+    "INDP",
+    "RAC1P",
+    "CIT",
+]
+LABEL_NAMES = {0: "Thấp", 1: "Trung bình", 2: "Cao"}
+FOD_GROUP_NAMES = {
+    0: "Chưa có bằng cử nhân",
+    11: "Nông nghiệp và các ngành liên quan",
+    13: "Môi trường và tài nguyên",
+    14: "Kiến trúc",
+    15: "Nghiên cứu khu vực, dân tộc và văn minh",
+    19: "Truyền thông và báo chí",
+    20: "Công nghệ truyền thông",
+    21: "Máy tính và hệ thống thông tin",
+    22: "Dịch vụ thẩm mỹ và nghệ thuật ẩm thực",
+    23: "Giáo dục",
+    24: "Kỹ thuật",
+    25: "Công nghệ kỹ thuật",
+    26: "Ngôn ngữ học và ngoại ngữ",
+    29: "Khoa học gia đình và người tiêu dùng",
+    32: "Dự bị luật và nghiên cứu pháp lý",
+    33: "Ngôn ngữ và văn học Anh",
+    34: "Giáo dục khai phóng và nhân văn",
+    35: "Khoa học thư viện",
+    36: "Sinh học",
+    37: "Toán và thống kê",
+    38: "Công nghệ quân sự",
+    40: "Đa ngành và liên ngành",
+    41: "Thể chất, công viên và giải trí",
+    48: "Triết học và nghiên cứu tôn giáo",
+    49: "Thần học và nghề nghiệp tôn giáo",
+    50: "Khoa học vật chất",
+    51: "Công nghệ hạt nhân, bức xạ công nghiệp và sinh học",
+    52: "Tâm lý học",
+    53: "Tư pháp hình sự và phòng cháy",
+    54: "Hành chính, chính sách công và công tác xã hội",
+    55: "Khoa học xã hội",
+    56: "Dịch vụ xây dựng",
+    57: "Công nghệ điện, cơ khí, chính xác và sản xuất",
+    59: "Khoa học và công nghệ vận tải",
+    60: "Nghệ thuật",
+    61: "Y tế và sức khỏe",
+    62: "Kinh doanh",
+    64: "Lịch sử",
+}
+
+
+def load_group_mappings(dictionary_path: str | Path) -> dict[str, pd.DataFrame]:
+    """Xuất ánh xạ từng mã, phát hiện trùng mã và mã không có quy tắc rõ ràng."""
+    entries = {column: [] for column in ("OCCP", "INDP", "FOD1P")}
+    with open(dictionary_path, encoding="utf-8-sig", newline="") as source:
+        for row in csv.reader(source):
+            if len(row) < 7 or row[0] != "VAL" or row[1] not in entries:
+                continue
+            if not row[4].isdigit():  # N/A được xử lý trước ở bước điền khuyết.
+                continue
+            code = int(row[4])
+            if row[4] != row[5]:
+                raise ValueError(f"Cần mã đơn để lập ánh xạ: {row}")
+            if row[1] == "FOD1P":
+                key = code // 100
+                if key not in FOD_GROUP_NAMES:
+                    raise ValueError(f"Chưa có tên nhóm FOD1P {key} cho mã {code}")
+                label = FOD_GROUP_NAMES[key]
+            elif code == 9920:
+                # Giữ riêng trong từ điển, tuyệt đối không nhập vào nhóm nghề/ngành khác.
+                key, label = "SPECIAL_9920", "Mã đặc biệt 9920"
+            else:
+                key, separator, _ = row[6].partition("-")
+                if not separator or not key.isalpha():
+                    raise ValueError(f"Không nhận diện được nhóm: {row}")
+                label = key
+            entries[row[1]].append((code, row[6], key, label))
+
+    mappings = {}
+    for column, records in entries.items():
+        if not records:
+            raise ValueError(f"Từ điển thiếu {column}")
+        table = pd.DataFrame(
+            records, columns=["raw_code", "raw_label", "group_key", "group_label"]
+        )
+        if table.raw_code.duplicated().any():
+            raise ValueError(f"Trùng mã/ánh xạ chồng lấn trong {column}")
+        if column == "FOD1P":
+            table.loc[len(table)] = [
+                0,
+                "N/A (less than bachelor's degree)",
+                0,
+                FOD_GROUP_NAMES[0],
+            ]
+            table["group_code"] = table.group_key.astype(int)
+        else:
+            # Thứ tự cố định từ từ điển đầy đủ, không đổi theo các nhóm xuất hiện trên train/test.
+            order = table.groupby("group_key").raw_code.min().sort_values().index
+            codes = {key: number for number, key in enumerate(order, start=1)}
+            table["group_code"] = table.group_key.map(codes).astype(int)
+        mappings[column] = table.sort_values("raw_code").reset_index(drop=True)
+    return mappings
+
+
+def label_income(earnings: pd.Series, thresholds: tuple[float, float]) -> pd.Series:
+    """Giữ đồng hạng cùng lớp: <= q1; (q1, q2]; > q2."""
+    q1, q2 = thresholds
+    if not np.isfinite([q1, q2]).all() or q1 >= q2:
+        raise ValueError("Hai ngưỡng tam phân vị phải hữu hạn và q1 < q2.")
+    values = pd.to_numeric(earnings, errors="raise")
+    if values.isna().any() or not np.isfinite(values).all() or (values <= 0).any():
+        raise ValueError("PERNP phải hữu hạn, không khuyết và dương.")
+    return pd.Series(
+        np.select([values <= q1, values <= q2], [0, 1], default=2),
+        index=earnings.index,
+        name="INCOME_CLASS",
+        dtype="int64",
+    )
+
+
+def prepare_transformed_data(
+    df: pd.DataFrame,
+    dictionary_path: str | Path,
+    test_size: float = 0.3,
+    random_state: int = 42,
+) -> dict:
+    """Nhận dữ liệu đã làm sạch/điền khuyết, tạo hai phiên bản có cùng dòng và nhãn."""
+    required = BASE_FEATURES + ["PERNP"]
+    missing = set(required) - set(df.columns)
+    if missing:
+        raise ValueError(
+            f"Thiếu cột biến đổi (cần WKWN thực tế, không dùng WKW): {sorted(missing)}"
+        )
+    if len(df) < 10:
+        raise ValueError("Cần ít nhất 10 dòng để chia dữ liệu và tạo ba lớp.")
+    data = df[required].apply(pd.to_numeric, errors="raise").reset_index(drop=True)
+    if data.isna().any().any() or not np.isfinite(data.to_numpy()).all():
+        raise ValueError("Dữ liệu biến đổi phải hữu hạn và đã điền khuyết.")
+    if data.mod(1).ne(0).any().any():
+        raise ValueError("Không ép kiểu che giá trị thập phân sai mã.")
+    if not data.WKHP.between(1, 99).all() or not data.WKWN.between(1, 52).all():
+        raise ValueError("WKHP/WKWN sai miền để tính ANNUAL_HOURS.")
+    if (
+        not data.AGEP.between(18, 99).all()
+        or (data.PERNP <= 0).any()
+        or (data.COW == 8).any()
+    ):
+        raise ValueError("Còn bản ghi ngoài phạm vi bài toán.")
+    mappings = load_group_mappings(dictionary_path)
+    # Chỉ một lần chia ngẫu nhiên, trước khi tính ngưỡng. Không dùng test để phân tầng nhãn.
+    train_rows, test_rows = train_test_split(
+        np.arange(len(data)),
+        test_size=test_size,
+        random_state=random_state,
+        shuffle=True,
+    )
+    quantiles = data.PERNP.iloc[train_rows].quantile([1 / 3, 2 / 3])
+    thresholds = (float(quantiles.iloc[0]), float(quantiles.iloc[1]))
+    labels = label_income(data.PERNP, thresholds)
+    if labels.iloc[train_rows].nunique() != 3:
+        raise ValueError(
+            "Train không tạo đủ ba lớp; cần kiểm tra phân phối/đồng hạng PERNP."
+        )
+
+    detailed = data[BASE_FEATURES].astype("int64").copy()
+    # Đây là ước tính; WKHP == 99 là top-code nên không phải số giờ chính xác.
+    detailed["ANNUAL_HOURS"] = detailed.WKHP * detailed.WKWN
+    grouped = detailed.copy()
+    for column, table in mappings.items():
+        values = data[column].map(table.set_index("raw_code").group_code)
+        if values.isna().any():
+            unknown = data.loc[values.isna(), column].unique().tolist()
+            raise ValueError(f"Mã {column} không có ánh xạ: {unknown[:10]}")
+        grouped = grouped.rename(columns={column: f"{column}_GROUP"})
+        grouped[f"{column}_GROUP"] = values.astype("int64")
+    return {
+        "variants": {"A_detailed": detailed, "B_grouped": grouped},
+        "labels": labels,
+        "train_rows": train_rows,
+        "test_rows": test_rows,
+        "thresholds": thresholds,
+        "mappings": mappings,
+        "random_state": random_state,
+        "test_size": test_size,
+    }
+
+
+def export_transformed_data(prepared: dict, output_dir: str | Path) -> dict:
+    """CSV đầu vào không chứa PERNP, nhãn hay ID; nhãn và vị trí dòng lưu riêng."""
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    labels = prepared["labels"]
+    positions = {"train": prepared["train_rows"], "test": prepared["test_rows"]}
+    metadata = {
+        "survey_year": "2024",
+        "state": "TX",
+        "rows": len(labels),
+        "random_state": prepared["random_state"],
+        "requested_test_size": prepared["test_size"],
+        "split_method": "random shuffle before fitting tertiles; no stratification",
+        "thresholds_train_only": dict(zip(["q1", "q2"], prepared["thresholds"])),
+        "label_names": LABEL_NAMES,
+        "label_rule": "0: PERNP <= q1; 1: q1 < PERNP <= q2; 2: PERNP > q2",
+        "annual_hours": "WKHP * WKWN (estimate; WKHP 99 means 99 or more)",
+        "encoding": "integer codes; no native nominal handling, one-hot or target encoding",
+        "variants": {},
+        "splits": {},
+    }
+    for split, indices in positions.items():
+        labels.iloc[indices].to_csv(output / f"y_{split}.csv", index=False)
+        pd.DataFrame({"prepared_row_id": indices}).to_csv(
+            output / f"rows_{split}.csv", index=False
+        )
+        counts = labels.iloc[indices].value_counts().reindex([0, 1, 2], fill_value=0)
+        metadata["splits"][split] = {
+            "rows": len(indices),
+            "class_counts": {int(k): int(v) for k, v in counts.items()},
+        }
+    domains = []
+    for variant, features in prepared["variants"].items():
+        metadata["variants"][variant] = {
+            "features": features.columns.tolist(),
+            "feature_count": features.shape[1],
+        }
+        for split, indices in positions.items():
+            features.iloc[indices].to_csv(
+                output / f"X_{variant}_{split}.csv", index=False
+            )
+        for column in features:
+            domains.append(
+                {
+                    "variant": variant,
+                    "feature": column,
+                    "min": int(features[column].min()),
+                    "max": int(features[column].max()),
+                    "unique_values": int(features[column].nunique()),
+                }
+            )
+    pd.DataFrame(domains).to_csv(
+        output / "feature_domains.csv", index=False, encoding="utf-8-sig"
+    )
+    for column, table in prepared["mappings"].items():
+        table.to_csv(
+            output / f"mapping_{column}.csv", index=False, encoding="utf-8-sig"
+        )
+    metadata["observed_groups"] = {
+        column: int(prepared["variants"]["B_grouped"][f"{column}_GROUP"].nunique())
+        for column in prepared["mappings"]
+    }
+    (output / "metadata.json").write_text(
+        json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    report = [
+        "KẾT QUẢ BIẾN ĐỔI DỮ LIỆU TEXAS 2024 — II.3 VÀ II.4",
+        f"Tổng bản ghi sau làm sạch: {len(labels):,}",
+        "II.3: A giữ mã chi tiết; B gom OCCP/INDP theo tiền tố nhãn từ điển, FOD1P theo mã // 100.",
+        "Cả A và B có ANNUAL_HOURS = WKHP * WKWN, là số giờ làm ước tính trong năm.",
+        "Không chia bins tuổi/giờ/tuần, không chuẩn hóa, không one-hot/target encoding.",
+        "scikit-learn xử lý mã nguyên bằng ngưỡng số, không phải phép chia nominal theo tập con.",
+        "II.4: Xáo trộn ngẫu nhiên 70/30 trước khi tính ngưỡng; không phân tầng theo nhãn chưa tồn tại.",
+        f"Seed: {prepared['random_state']}; tam phân vị chỉ tính trên train (nội suy tuyến tính mặc định pandas).",
+        f"Ngưỡng: q1 = {prepared['thresholds'][0]:,.2f}; q2 = {prepared['thresholds'][1]:,.2f}",
+        "Nhãn 0 (Thấp): PERNP <= q1; 1 (Trung bình): q1 < PERNP <= q2; 2 (Cao): PERNP > q2.",
+        "Giữ người cùng thu nhập cùng nhãn; không ép số lượng ba lớp bằng nhau.",
+        "Đây là tam phân vị mẫu không trọng số, không phải ngưỡng thu nhập dân số Texas.",
+        "PERNP không xuất vào X; y và ID vị trí dòng được lưu riêng. A/B có cùng dòng, thứ tự và nhãn.",
+    ]
+    for split, info in metadata["splits"].items():
+        report.append(f"{split}: {info['rows']:,} dòng")
+        for code, count in info["class_counts"].items():
+            report.append(
+                f"  {code} ({LABEL_NAMES[code]}): {count:,} ({count / info['rows'] * 100:.2f}%)"
+            )
+    report.append(f"Số nhóm quan sát: {metadata['observed_groups']}")
+    report.extend(
+        [
+            "Kiểm chứng ánh xạ: mỗi mã từ điển chỉ có một nhóm, mã lạ gây lỗi thay vì tự gán nhóm khác.",
+            "FOD1P_GROUP = 0 là chưa có bằng cử nhân; 37 nhóm ngành + nhóm 0 trên dữ liệu hiện có.",
+            "mapping_*.csv chứa từng mã, nhãn gốc, khóa nhóm và mã nhóm để đối chiếu/trình bày phụ lục.",
+            "feature_domains.csv chứa miền giá trị quan sát; không được dùng min/max này làm quy tắc học từ test.",
+            "rows_*.csv là vị trí 0-based sau làm sạch, không phải ID Census, không đưa vào mô hình.",
+            "Chỉ chuẩn bị dữ liệu; chưa có kết quả CART/RF. Tinh chỉnh trên train/CV, test dành đánh giá cuối.",
+        ]
+    )
+    text = "\n".join(report) + "\n"
+    (output / "ket_qua_bien_doi.txt").write_text(text, encoding="utf-8")
+    print("\n" + text)
+    print(f"Đã xuất dữ liệu: {output.resolve()}")
+    return metadata
