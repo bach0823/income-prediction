@@ -161,12 +161,13 @@ if __name__ == "__main__":
         from data_transformation import prepare_transformed_data, export_transformed_data
 
         project_dir = Path(__file__).resolve().parent
-        dictionary_path = project_dir / "data/pums/data_dict_2024/PUMS_Data_Dictionary_2024.csv"
-        output_dir = project_dir / "data/processed/texas_2024"
 
         export_transformed_data(
-            prepare_transformed_data(df, dictionary_path),
-            output_dir,
+            prepare_transformed_data(
+                df,
+                project_dir / "data/pums/data_dict_2024/PUMS_Data_Dictionary_2024.csv",
+            ),
+            project_dir / "data/processed/texas_2024",
         )
     else:
         print("Chỉ hỗ trợ biến đổi dữ liệu năm 2024.")
