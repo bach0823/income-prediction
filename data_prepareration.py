@@ -46,25 +46,14 @@ DEFAULT_STUDY_FEATURES = [
     "PERNP",
 ]
 
-DEFAULT_DATA_PATHS = [
-    os.path.join(os.getcwd(), "data", "pums"),
-    os.path.join(os.getcwd(), "BAITAPLON", "Project", "data", "pums"),
-    r"g:\My Drive\Môn\KPDL\DataMining\BAITAPLON\Project\data\pums",
-]
+DATA_PATH = r"G:\My Drive\Môn\KPDL\DataMining\BAITAPLON\Project\data\pums"
 
 
-def resolve_data_dir(data_dir: Optional[str] = None) -> str:
-    """Xác định đường dẫn thư mục PUMS tồn tại trên hệ thống."""
-    if data_dir and os.path.exists(data_dir):
-        return data_dir
-
-    for path in DEFAULT_DATA_PATHS:
-        if os.path.exists(path):
-            return path
-
-    raise FileNotFoundError(
-        f"Không tìm thấy thư mục chứa dữ liệu PUMS trong các đường dẫn mặc định: {DEFAULT_DATA_PATHS}"
-    )
+def resolve_data_dir() -> str:
+    """Trả về đường dẫn PUMS cố định trên máy chạy dự án."""
+    if not os.path.isdir(DATA_PATH):
+        raise FileNotFoundError(f"Không tìm thấy thư mục dữ liệu PUMS: {DATA_PATH}")
+    return DATA_PATH
 
 
 # ---------------------------------------------------------
@@ -75,13 +64,12 @@ def load_raw_dataset(
     horizon: str = "1-Year",
     survey: str = "person",
     states: list = ["TX"],
-    data_dir: Optional[str] = None,
     download: bool = False,
 ) -> pd.DataFrame:
     """
     Nạp dữ liệu vi mô ACS PUMS từ Census Bureau qua thư viện folktables.
     """
-    root_pums = resolve_data_dir(data_dir)
+    root_pums = resolve_data_dir()
     print(f"[*] Thư mục dữ liệu PUMS: {root_pums}")
     print(
         f"[*] Đang nạp ACS PUMS {survey_year} ({horizon}, survey={survey}, states={states})..."
