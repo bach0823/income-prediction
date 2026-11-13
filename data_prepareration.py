@@ -123,65 +123,33 @@ def select_study_features(
 
 
 def show_homogeneity_checks(df: pd.DataFrame) -> None:
-    """
-    Khảo sát các điều kiện chọn đối tượng nghiên cứu và mã đặc biệt
-    trước khi thực hiện lọc dữ liệu đồng nhất.
-    """
-    print("\n" + "=" * 85)
-    print("[3.2] KHẢO SÁT CÁC ĐIỀU KIỆN CHỌN ĐỐI TƯỢNG NGHIÊN CỨU")
-    print("=" * 85)
+    """Khảo sát ngắn các điều kiện lọc và một số mã/giá trị cần chú ý."""
+    n = len(df)
+    print("\n--- KHẢO SÁT TRƯỚC KHI LỌC ---")
+    for col, condition, label in [
+        ("AGEP", df["AGEP"] >= 18, "AGEP >= 18 (người trưởng thành)"),
+        ("WKHP", df["WKHP"] > 0, "WKHP > 0 (có giờ làm)"),
+        ("PERNP", df["PERNP"] > 0, "PERNP > 0 (thu nhập dương)"),
+        ("COW", df["COW"] != 8, "COW != 8 (ngoài nhóm lao động gia đình không lương)"),
+    ]:
+        print(f"{label:<58}: {condition.sum():>8,} ({condition.mean() * 100:5.2f}%)")
 
-    n_total = len(df)
+    # Các trường hợp này chỉ được khảo sát, không tự động loại bỏ.
+    basic_cohort = (df["AGEP"] >= 18) & (df["WKHP"] > 0) & (df["PERNP"] > 0)
+    cow8 = df.loc[basic_cohort & (df["COW"] == 8), "PERNP"]
+    print(f"\nCOW == 8 trong nhóm cơ bản: {len(cow8):,} dòng")
+    if not cow8.empty:
+        print("Phân vị PERNP:", cow8.quantile([0.1, 0.25, 0.5, 0.75, 0.9]).round(2).to_dict())
 
-    # 1. Đối tượng nghiên cứu cơ bản
-    mask_age = df["AGEP"] >= 18
-    mask_wkhp = df["WKHP"] > 0
-    mask_pernp = df["PERNP"] > 0
-    print(
-        f"1. Bộ lọc độ tuổi (AGEP >= 18)                 : {mask_age.sum():>7,} dòng ({mask_age.mean() * 100:5.2f}%)"
-    )
-    print(
-        f"2. Giờ làm việc dương (WKHP > 0)               : {mask_wkhp.sum():>7,} dòng ({mask_wkhp.mean() * 100:5.2f}%)"
-    )
-    print(
-        f"3. Thu nhập lao động dương (PERNP > 0)         : {mask_pernp.sum():>7,} dòng ({mask_pernp.mean() * 100:5.2f}%)"
-    )
+    for label, mask in [
+        ("PERNP <= 100 USD/năm", df["PERNP"] <= 100),
+        ("WKHP > 84 giờ/tuần", df["WKHP"] > 84),
+    ]:
+        print(f"{label:<58}: {mask.sum():>8,} ({mask.mean() * 100:5.2f}%)")
 
-    # Khảo sát mã 8 trong cohort cơ bản để thấy tác động riêng của giới hạn phạm vi.
-    print(
-        "\n--- Kiểm tra nhóm COW == 8 (Làm việc gia đình không hưởng lương nhưng PERNP > 0) ---"
-    )
-    cow8 = df[mask_age & mask_wkhp & mask_pernp & (df["COW"] == 8)]
-    print(
-        f"Số dòng COW == 8 trong cohort cơ bản (tỷ lệ trên dữ liệu đầu vào): {len(cow8):,} ({len(cow8) / n_total * 100:.2f}%)"
-    )
-    if len(cow8) > 0:
-        print(cow8["PERNP"].describe().round(2).to_string())
-        print("\nPhân vị 10% (Deciles) PERNP của nhóm COW == 8:")
-        print(cow8["PERNP"].quantile(np.arange(0.1, 1.0, 0.1)).round(2).to_string())
-
-    # 3. Khảo sát thu nhập rất thấp, chưa đủ căn cứ kết luận là sai (PERNP <= 100 USD/năm)
-    print("\n--- Kiểm tra nhóm thu nhập rất thấp (PERNP <= 100 USD/năm) ---")
-    low_inc = df[df["PERNP"] <= 100]
-    print(
-        f"Số bản ghi có PERNP <= 100: {len(low_inc):,} ({len(low_inc) / n_total * 100:.2f}%)"
-    )
-
-    # 4. Thời gian làm việc cực đoan (WKHP > 84 giờ/tuần)
-    print("\n--- Kiểm tra số giờ làm việc cực đoan (WKHP > 84 giờ/tuần) ---")
-    extreme_wkhp = df[df["WKHP"] > 84]
-    print(
-        f"Số bản ghi có WKHP > 84: {len(extreme_wkhp):,} ({len(extreme_wkhp) / n_total * 100:.2f}%)"
-    )
-
-    # 5. Mã đặc biệt 9920 ở INDP và OCCP (Thất nghiệp / Không có kinh nghiệm 5 năm)
-    print("\n--- Kiểm tra mã đặc biệt 9920 (Thất nghiệp >= 5 năm) ở INDP và OCCP ---")
     for col in ["INDP", "OCCP"]:
-        if col in df.columns:
-            cnt_9920 = (df[col] == 9920).sum()
-            print(
-                f"- Cột {col:<5}: {cnt_9920} dòng mang mã 9920 ({cnt_9920 / n_total * 100:.2f}%)"
-            )
+        count = (df[col] == 9920).sum()
+        print(f"Mã 9920 trong {col}: {count:,} dòng ({count / n * 100:.2f}%)")
 
 
 def apply_data_homogenization(df: pd.DataFrame) -> pd.DataFrame:
@@ -243,7 +211,7 @@ def apply_data_homogenization(df: pd.DataFrame) -> pd.DataFrame:
 # Bước 2.1.1.2: Kiểm tra & Đánh giá Nhiễu theo 2 nhóm biến
 # ---------------------------------------------------------
 def load_pums_domains(survey_year: str, dictionary_path: Optional[str] = None) -> dict:
-    """Đọc đúng các mã/khoảng mã công bố, không suy luận từ min/max."""
+    """Đọc các khoảng mã hợp lệ (VAL) từ data dictionary ACS PUMS."""
     if dictionary_path is None:
         root = Path(__file__).resolve().parent / "data" / "pums"
         filename = f"PUMS_Data_Dictionary_{survey_year}.csv"
@@ -251,22 +219,20 @@ def load_pums_domains(survey_year: str, dictionary_path: Optional[str] = None) -
             root / f"data_dict_{survey_year}" / filename,
             root / survey_year / "data_dict" / filename,
         ]
-        dictionary_path = next(
-            (str(path) for path in candidates if path.is_file()), None
-        )
-        if dictionary_path is None:
-            raise FileNotFoundError(
-                f"Không có từ điển PUMS {survey_year}: {candidates}"
-            )
+        dictionary_file = next((p for p in candidates if p.is_file()), None)
+        if dictionary_file is None:
+            raise FileNotFoundError(f"Không tìm thấy data dictionary {survey_year}: {candidates}")
+        dictionary_path = str(dictionary_file)
+
     domains = {}
-    with open(dictionary_path, encoding="utf-8-sig", newline="") as source:
-        for row in csv.reader(source):
+    with open(dictionary_path, encoding="utf-8-sig", newline="") as file:
+        for row in csv.reader(file):
             if len(row) < 7 or row[0].strip() != "VAL":
                 continue
             try:
                 lower, upper = int(row[4]), int(row[5])
             except ValueError:
-                # Mã b/bb/bbbb là N/A, được thống kê riêng dưới dạng missing.
+                # Các mã b/bb/bbbb biểu thị không áp dụng/khuyết thiếu.
                 continue
             domains.setdefault(row[1].strip(), []).append((lower, upper))
     return domains
@@ -277,117 +243,94 @@ def check_noise_by_variable_groups(
     survey_year: str = "2024",
     dictionary_path: Optional[str] = None,
 ) -> pd.DataFrame:
-    """Kiểm tra miền và cohort; giữ cực đoan hợp lệ, dừng khi sai miền.
-
-    Chạy trước điền khuyết: mã 0 tự tạo cho ENG/FOD1P không phải mã PUMS gốc.
-    Missing được báo riêng và xử lý ở bước tiếp theo, không coi là mã sai.
+    """
+    Đối chiếu mã dữ liệu với data dictionary ACS và khảo sát giá trị cực đoan.
+    Giá trị thiếu được báo riêng; giá trị cực đoan hợp lệ không bị tự động xóa.
     """
     if df.empty:
-        raise ValueError("Không thể kiểm tra nhiễu trên tập dữ liệu rỗng.")
-    survey_year = str(survey_year)
-    domains = load_pums_domains(survey_year, dictionary_path)
-    wkw_col = "WKWN" if "WKWN" in df.columns else "WKW"
-    cat_cols = [
-        "SEX",
-        "MAR",
-        "CIT",
-        "RAC1P",
-        "COW",
-        "ENG",
-        "SCHL",
-        "FOD1P",
-        "OCCP",
-        "INDP",
-    ]
-    num_cols = ["AGEP", "WKHP", "PERNP"]
-    # WKW là mã nhóm 1..6; WKWN mới là số tuần thực tế 1..52.
-    (num_cols if wkw_col == "WKWN" else cat_cols).append(wkw_col)
-    required = cat_cols + num_cols
-    missing_columns = set(required) - set(df.columns)
-    if missing_columns:
-        raise ValueError(f"Thiếu cột kiểm tra nhiễu: {sorted(missing_columns)}")
-    missing_domains = set(required) - set(domains)
-    if missing_domains:
-        raise ValueError(
-            f"Từ điển PUMS {survey_year} thiếu miền: {sorted(missing_domains)}"
-        )
+        raise ValueError("Tập dữ liệu rỗng.")
 
-    print("\n" + "=" * 85)
-    print(f"KIỂM TRA NHIỄU THEO TỪ ĐIỂN PUMS {survey_year} (TRƯỚC ĐIỀN KHUYẾT)")
-    print("=" * 85)
+    domains = load_pums_domains(str(survey_year), dictionary_path)
+    wkw_col = "WKWN" if "WKWN" in df.columns else "WKW"
+    categorical = ["SEX", "MAR", "CIT", "RAC1P", "COW", "ENG", "SCHL", "FOD1P", "OCCP", "INDP"]
+    numerical = ["AGEP", "WKHP", "PERNP"]
+    (numerical if wkw_col == "WKWN" else categorical).append(wkw_col)
+    columns = categorical + numerical
+
+    missing_columns = set(columns) - set(df.columns)
+    missing_domains = set(columns) - set(domains)
+    if missing_columns:
+        raise ValueError(f"Thiếu cột dữ liệu: {sorted(missing_columns)}")
+    if missing_domains:
+        raise ValueError(f"Data dictionary thiếu miền giá trị: {sorted(missing_domains)}")
+
+    print(f"\n--- KIỂM TRA MIỀN GIÁ TRỊ THEO ACS PUMS {survey_year} ---")
+    numeric_data = {}
     invalid_rows = pd.Series(False, index=df.index)
-    numeric = {}
-    invalid_cells = 0
-    for title, columns in [("BIẾN PHÂN LOẠI", cat_cols), ("BIẾN SỐ", num_cols)]:
-        print(f"\n--- {title} ---")
-        for col in columns:
+
+    for group_name, group_columns in [
+        ("BIẾN PHÂN LOẠI", categorical),
+        ("BIẾN SỐ", numerical),
+    ]:
+        print(f"\n{group_name}")
+        for col in group_columns:
             values = pd.to_numeric(df[col], errors="coerce")
-            numeric[col] = values
+            numeric_data[col] = values
+
             in_domain = pd.Series(False, index=df.index)
             for lower, upper in domains[col]:
                 in_domain |= values.between(lower, upper)
-            # Không ép int trước kiểm tra: 1.5, chuỗi lỗi và vô cực phải bị phát hiện.
-            valid = (in_domain & np.isfinite(values) & values.mod(1).eq(0)).fillna(
-                False
-            )
+
+            valid = in_domain & np.isfinite(values) & (values % 1 == 0)
             invalid = df[col].notna() & ~valid
             invalid_rows |= invalid
-            invalid_cells += int(invalid.sum())
+
             print(
-                f"  + {col:<8}: {df[col].nunique():>4} giá trị khác nhau; "
-                f"missing: {df[col].isna().sum():>7,}; sai miền/kiểu: {invalid.sum():>7,}"
+                f"{col:<7} | khác nhau: {df[col].nunique():>5,} "
+                f"| thiếu: {df[col].isna().sum():>6,} "
+                f"| sai mã/kiểu: {invalid.sum():>5,}"
             )
             if invalid.any():
-                print(
-                    f"    Ví dụ sai: {df.loc[invalid, col].astype(str).unique()[:10].tolist()}"
-                )
+                print("  Ví dụ:", df.loc[invalid, col].astype(str).unique()[:5].tolist())
 
-    # Phạm vi nghiên cứu tách biệt với miền dữ liệu gốc: mã hợp lệ vẫn có thể ngoài cohort.
-    cohort_violations = (
-        (numeric["AGEP"] < 18)
-        | (numeric["WKHP"] <= 0)
-        | (numeric["PERNP"] <= 0)
-        | (numeric["COW"] == 8)
-    )
-    print(f"\nNgoài phạm vi cohort: {cohort_violations.sum():,} dòng")
+    # Kiểm tra lại phạm vi cohort; đây không phải kiểm tra mã hợp lệ trong dictionary.
+    cohort_invalid = (
+        (numeric_data["AGEP"] < 18)
+        | (numeric_data["WKHP"] <= 0)
+        | (numeric_data["PERNP"] <= 0)
+        | (numeric_data["COW"] == 8)
+    ).fillna(False)
+
+    print(f"\nSố ô khuyết thiếu: {df[columns].isna().sum().sum():,}")
+    print(f"Số dòng ngoài cohort: {cohort_invalid.sum():,}")
+
+    print("\nPhân vị các biến số:")
     print(
-        f"Tổng missing (xử lý riêng ở bước sau): {df[required].isna().sum().sum():,} ô"
-    )
-    print("\n--- PHÂN VỊ BIẾN SỐ ---")
-    print(
-        pd.DataFrame(numeric)[num_cols]
+        pd.DataFrame(numeric_data)[numerical]
         .replace([np.inf, -np.inf], np.nan)
-        .quantile([0, 0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99, 1])
-        .T.round(2)
-        .to_string()
+        .quantile([0, 0.01, 0.25, 0.5, 0.75, 0.99, 1])
+        .T.round(2).to_string()
     )
 
-    print("\n--- CÁC NHÓM CỰC ĐOAN CẦN KHẢO SÁT, KHÔNG TỰ ĐỘNG XÓA ---")
+    print("\nKhảo sát một số giá trị cực đoan (không tự động loại):")
     extreme_groups = {
-        "AGEP >= 85": numeric["AGEP"] >= 85,
-        "WKHP > 84": numeric["WKHP"] > 84,
-        "WKHP == 99 (99 giờ trở lên)": numeric["WKHP"] == 99,
-        "0 < PERNP <= 100": (numeric["PERNP"] > 0) & (numeric["PERNP"] <= 100),
-        "PERNP > 500000": numeric["PERNP"] > 500000,
+        "AGEP >= 85": numeric_data["AGEP"] >= 85,
+        "WKHP > 84": numeric_data["WKHP"] > 84,
+        "WKHP == 99": numeric_data["WKHP"] == 99,
+        "0 < PERNP <= 100": (numeric_data["PERNP"] > 0) & (numeric_data["PERNP"] <= 100),
+        "PERNP > 500000": numeric_data["PERNP"] > 500000,
     }
     for label, mask in extreme_groups.items():
-        print(f"  + {label:<32}: {mask.sum():>7,} dòng ({mask.mean() * 100:.2f}%)")
+        print(f"{label:<22}: {mask.sum():>7,} dòng ({mask.mean() * 100:.2f}%)")
 
-    print(
-        f"\nKết quả: {invalid_cells:,} ô sai miền/kiểu trên {invalid_rows.sum():,} dòng."
-    )
-    if invalid_rows.any() or cohort_violations.any():
-        raise ValueError(
-            "Phát hiện dữ liệu sai miền/kiểu hoặc ngoài cohort. "
-            "Dừng pipeline để kiểm tra; không tự xóa, ép kiểu hay chia bins che lỗi."
-        )
-    print(
-        f"[✓] Giá trị không khuyết nằm trong miền PUMS {survey_year} và phạm vi cohort."
-    )
-    print("Top-coding bảo vệ riêng tư, không bảo đảm mọi giá trị đều chính xác.")
-    print("Không bắt buộc chia bins; không cắt đuôi PERNP chỉ vì thu nhập cực đoan.")
-    print(f"=> Giữ nguyên {len(df):,} dòng; missing được xử lý ở bước tiếp theo.")
+    invalid_count = int(invalid_rows.sum())
+    print(f"\nKết quả: {invalid_count:,} dòng có giá trị sai miền/kiểu.")
+    if invalid_count or cohort_invalid.any():
+        raise ValueError("Có dữ liệu sai miền/kiểu hoặc ngoài cohort; cần kiểm tra trước khi tiếp tục.")
+
+    print(f"[✓] Giữ nguyên {len(df):,} dòng. Không cắt bỏ giá trị cực đoan hợp lệ.")
     return df
+
 
 
 # ---------------------------------------------------------
