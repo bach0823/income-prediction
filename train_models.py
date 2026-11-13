@@ -1,6 +1,5 @@
-"""Huấn luyện CART/Random Forest trên A/B. Chạy: python train_models.py
-
-Chạy thử luồng với ít dữ liệu: python train_models.py --quick
+"""Huấn luyện CART/Random Forest trên hai phiên bản dữ liệu A/B.
+Chạy: python train_models.py
 Không tính lại nhãn, không chia lại train/test và không thay đổi dữ liệu đã chuẩn bị.
 """
 
@@ -22,13 +21,18 @@ from sklearn.metrics import (
     confusion_matrix,
     f1_score,
 )
-from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
+from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from sklearn.tree import DecisionTreeClassifier
 
 PROJECT_DIR = Path(__file__).resolve().parent
 VARIANTS = ("A_detailed", "B_grouped")
 LABELS = [0, 1, 2]
 LABEL_NAMES = ["Thấp", "Trung bình", "Cao"]
+
+DATA_DIR = PROJECT_DIR / "data/processed/texas_2024"
+OUTPUT_DIR = PROJECT_DIR / "data/results/cart_randomforest"
+RANDOM_STATE = 42
+RF_N_JOBS = 1
 
 
 def load_training_data(data_dir: Path) -> dict:
@@ -95,23 +99,21 @@ def load_training_data(data_dir: Path) -> dict:
     return result
 
 
-def make_search(
-    model_name: str, cv: int, seed: int, jobs: int, quick: bool
-) -> GridSearchCV:
-    """CV chỉ trên train; RF chạy song song bên trong, không lồng nhiều tầng worker."""
-    folds = StratifiedKFold(n_splits=cv, shuffle=True, random_state=seed)
+def make_search(model_name: str, cv: int) -> GridSearchCV:
+    """CV chỉ trên train; RF dùng một luồng để hạn chế tải RAM/CPU."""
+    folds = StratifiedKFold(n_splits=cv, shuffle=True, random_state=RANDOM_STATE)
     if model_name == "CART":
-        estimator = DecisionTreeClassifier(criterion="gini", random_state=seed)
+        estimator = DecisionTreeClassifier(criterion="gini", random_state=RANDOM_STATE)
         grid = {
-            "max_depth": [6, None] if quick else [12, None],
-            "min_samples_leaf": [10] if quick else [20, 100],
+            "max_depth": [12, None],
+            "min_samples_leaf": [20, 100],
         }
     elif model_name == "RandomForest":
         estimator = RandomForestClassifier(
-            criterion="gini", random_state=seed, n_jobs=jobs
+            criterion="gini", random_state=RANDOM_STATE, n_jobs=RF_N_JOBS
         )
         grid = {
-            "n_estimators": [20] if quick else [100, 200],
+            "n_estimators": [100, 200],
             "max_features": ["sqrt"],
             "min_samples_leaf": [5, 20],
         }
@@ -129,45 +131,21 @@ def make_search(
     )
 
 
-def run_experiments(
-    data_dir: Path,
-    output_dir: Path,
-    model: str = "both",
-    variant: str = "both",
-    cv: int = 3,
-    jobs: int = -1,
-    seed: int = 42,
-    quick: bool = False,
-) -> pd.DataFrame:
-    if cv < 2 or jobs == 0:
-        raise ValueError("cv phải >= 2 và jobs không được bằng 0")
-    if model not in ("both", "cart", "randomforest") or variant not in (
-        "both",
-        *VARIANTS,
-    ):
-        raise ValueError("Tên mô hình/phiên bản không hợp lệ")
-    data = load_training_data(data_dir)
+def run_experiments(variant: str = "both", cv: int = 3) -> pd.DataFrame:
+    if cv < 2:
+        raise ValueError("cv phải >= 2")
+    if variant not in ("both", *VARIANTS):
+        raise ValueError("Phiên bản dữ liệu không hợp lệ")
+    data = load_training_data(DATA_DIR)
     selected_variants = VARIANTS if variant == "both" else (variant,)
-    models = (
-        ["CART", "RandomForest"]
-        if model == "both"
-        else [{"cart": "CART", "randomforest": "RandomForest"}[model]]
-    )
-    positions = {}
-    for split, y in data["y"].items():
-        indices = np.arange(len(y))
-        limit = 3000 if split == "train" else 1000
-        if quick and len(indices) > limit:
-            indices, _ = train_test_split(
-                indices, train_size=limit, stratify=y, random_state=seed
-            )
-        positions[split] = indices
+    models = ["CART", "RandomForest"]
+    positions = {split: np.arange(len(y)) for split, y in data["y"].items()}
     train_ids, test_ids = positions["train"], positions["test"]
     y_train = data["y"]["train"].iloc[train_ids].reset_index(drop=True)
     y_test = data["y"]["test"].iloc[test_ids].reset_index(drop=True)
     if y_train.value_counts().reindex(LABELS, fill_value=0).min() < cv:
         raise ValueError("Mỗi lớp train phải có ít nhất cv bản ghi")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     majority = int(y_train.mode().iloc[0])
     baseline = np.full(len(y_test), majority)
     summaries = []
@@ -180,7 +158,7 @@ def run_experiments(
                 f"\n[{version}/{name}] CV={cv}; train={len(y_train):,}, test={len(y_test):,}",
                 flush=True,
             )
-            search = make_search(name, cv, seed, jobs, quick)
+            search = make_search(name, cv)
             started = perf_counter()
             search.fit(x_train, y_train)
             fit_seconds = perf_counter() - started
@@ -201,7 +179,6 @@ def run_experiments(
             summary = {
                 "variant": version,
                 "model": name,
-                "quick": quick,
                 "train_rows": len(y_train),
                 "test_rows": len(y_test),
                 "cv_macro_f1": float(search.best_score_),
@@ -229,7 +206,7 @@ def run_experiments(
             summary["macro_f1_train_test_gap"] = (
                 summary["train_macro_f1"] - summary["test_macro_f1"]
             )
-            prefix = output_dir / f"{version}_{name}"
+            prefix = OUTPUT_DIR / f"{version}_{name}"
             pd.DataFrame(search.cv_results_).to_csv(f"{prefix}_cv.csv", index=False)
             pd.DataFrame(report).T.to_csv(
                 f"{prefix}_classification_report.csv", encoding="utf-8-sig"
@@ -268,15 +245,14 @@ def run_experiments(
                 flush=True,
             )
     comparisons = pd.DataFrame(summaries)
-    comparisons.to_csv(output_dir / "comparison.csv", index=False, encoding="utf-8-sig")
+    comparisons.to_csv(OUTPUT_DIR / "comparison.csv", index=False, encoding="utf-8-sig")
     # Không chọn lại mô hình/siêu tham số theo test. Ưu tiên theo điểm CV train.
     recommended = comparisons.sort_values("cv_macro_f1", ascending=False).iloc[0]
     experiment = {
-        "quick": quick,
-        "seed": seed,
+        "seed": RANDOM_STATE,
         "cv_folds": cv,
         "selection_metric": "f1_macro",
-        "data_dir": str(data_dir.resolve()),
+        "data_dir": str(DATA_DIR.resolve()),
         "versions": {"sklearn": sklearn.__version__, "pandas": pd.__version__},
         "data_metadata": data["metadata"],
         "results": details,
@@ -292,14 +268,13 @@ def run_experiments(
             "model": recommended["model"],
         },
     }
-    (output_dir / "results.json").write_text(
+    (OUTPUT_DIR / "results.json").write_text(
         json.dumps(experiment, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     notes = [
-        "KẾT QUẢ CART / RANDOM FOREST — "
-        + ("CHẠY THỬ, KHÔNG DÙNG NỘP BÁO CÁO" if quick else "THỰC NGHIỆM ĐẦY ĐỦ"),
+        "KẾT QUẢ CART / RANDOM FOREST — THỰC NGHIỆM ĐẦY ĐỦ",
         "A: mã chi tiết; B: gom nhóm. Đọc nhãn/ngưỡng và train/test đã lưu, không tính lại.",
-        f"Train sử dụng: {len(y_train):,}; test sử dụng: {len(y_test):,}; seed={seed}; CV={cv} folds.",
+        f"Train sử dụng: {len(y_train):,}; test sử dụng: {len(y_test):,}; seed={RANDOM_STATE}; CV={cv} folds.",
         "Chọn siêu tham số bằng StratifiedKFold chỉ trên train, tối ưu Macro-F1; refit trên train.",
         "Đánh giá test sau khi chốt tham số; không dùng test để điều chỉnh mô hình.",
         "Thời gian tìm kiếm bao gồm các lượt CV và refit, không chỉ một lần fit.",
@@ -324,14 +299,10 @@ def run_experiments(
         f"Ưu tiên theo CV (không chọn theo test): {recommended['variant']} / {recommended['model']}.",
         "Đọc mô hình bằng joblib.load chỉ với file tin cậy; dùng đúng thứ tự cột trong metadata.",
     ]
-    if quick:
-        notes.append(
-            "Quick lấy mẫu phân tầng tối đa 3000 train/1000 test, RF 20 cây; chỉ kiểm tra luồng chạy."
-        )
-    (output_dir / "ket_qua_mo_hinh.txt").write_text(
+    (OUTPUT_DIR / "ket_qua_mo_hinh.txt").write_text(
         "\n".join(notes) + "\n", encoding="utf-8"
     )
-    print(f"\nĐã lưu: {output_dir.resolve()}", flush=True)
+    print(f"\nĐã lưu: {OUTPUT_DIR.resolve()}", flush=True)
     return comparisons
 
 
@@ -339,42 +310,11 @@ def main():
     if isinstance(sys.stdout, TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--data-dir", type=Path, default=PROJECT_DIR / "data/processed/texas_2024"
-    )
-    parser.add_argument("--output-dir", type=Path, default=None)
-    parser.add_argument(
-        "--model", choices=["both", "cart", "randomforest"], default="both"
-    )
     parser.add_argument("--variant", choices=["both", *VARIANTS], default="both")
     parser.add_argument("--cv", type=int, default=3)
-    parser.add_argument(
-        "--jobs",
-        type=int,
-        default=-1,
-        help="Số luồng RF; -1 dùng các lõi khả dụng, 1 giảm tải máy",
-    )
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument(
-        "--quick",
-        action="store_true",
-        help="Chạy thử ít dữ liệu, KHÔNG dùng kết quả cho báo cáo",
-    )
     args = parser.parse_args()
-    output = args.output_dir or PROJECT_DIR / "data/results" / (
-        "cart_randomforest_quick" if args.quick else "cart_randomforest"
-    )
     try:
-        run_experiments(
-            args.data_dir,
-            output,
-            args.model,
-            args.variant,
-            args.cv,
-            args.jobs,
-            args.seed,
-            args.quick,
-        )
+        run_experiments(args.variant, args.cv)
     except (FileNotFoundError, ValueError) as error:
         parser.exit(
             1,
