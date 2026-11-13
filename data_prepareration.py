@@ -135,8 +135,8 @@ def show_homogeneity_checks(df: pd.DataFrame) -> None:
         print(f"{label:<58}: {condition.sum():>8,} ({condition.mean() * 100:5.2f}%)")
 
     # Các trường hợp này chỉ được khảo sát, không tự động loại bỏ.
-    basic_cohort = (df["AGEP"] >= 18) & (df["WKHP"] > 0) & (df["PERNP"] > 0)
-    cow8 = df.loc[basic_cohort & (df["COW"] == 8), "PERNP"]
+    basic_nhóm đối tượng nghiên cứu = (df["AGEP"] >= 18) & (df["WKHP"] > 0) & (df["PERNP"] > 0)
+    cow8 = df.loc[basic_nhóm đối tượng nghiên cứu & (df["COW"] == 8), "PERNP"]
     print(f"\nCOW == 8 trong nhóm cơ bản: {len(cow8):,} dòng")
     if not cow8.empty:
         print("Phân vị PERNP:", cow8.quantile([0.1, 0.25, 0.5, 0.75, 0.9]).round(2).to_dict())
@@ -293,8 +293,8 @@ def check_noise_by_variable_groups(
             if invalid.any():
                 print("  Ví dụ:", df.loc[invalid, col].astype(str).unique()[:5].tolist())
 
-    # Kiểm tra lại phạm vi cohort; đây không phải kiểm tra mã hợp lệ trong dictionary.
-    cohort_invalid = (
+    # Kiểm tra lại phạm vi nhóm đối tượng nghiên cứu; đây không phải kiểm tra mã hợp lệ trong dictionary.
+    nhóm đối tượng nghiên cứu_invalid = (
         (numeric_data["AGEP"] < 18)
         | (numeric_data["WKHP"] <= 0)
         | (numeric_data["PERNP"] <= 0)
@@ -302,7 +302,7 @@ def check_noise_by_variable_groups(
     ).fillna(False)
 
     print(f"\nSố ô khuyết thiếu: {df[columns].isna().sum().sum():,}")
-    print(f"Số dòng ngoài cohort: {cohort_invalid.sum():,}")
+    print(f"Số dòng ngoài nhóm đối tượng nghiên cứu: {nhóm đối tượng nghiên cứu_invalid.sum():,}")
 
     print("\nPhân vị các biến số:")
     print(
@@ -325,8 +325,8 @@ def check_noise_by_variable_groups(
 
     invalid_count = int(invalid_rows.sum())
     print(f"\nKết quả: {invalid_count:,} dòng có giá trị sai miền/kiểu.")
-    if invalid_count or cohort_invalid.any():
-        raise ValueError("Có dữ liệu sai miền/kiểu hoặc ngoài cohort; cần kiểm tra trước khi tiếp tục.")
+    if invalid_count or nhóm đối tượng nghiên cứu_invalid.any():
+        raise ValueError("Có dữ liệu sai miền/kiểu hoặc ngoài nhóm đối tượng nghiên cứu; cần kiểm tra trước khi tiếp tục.")
 
     print(f"[✓] Giữ nguyên {len(df):,} dòng. Không cắt bỏ giá trị cực đoan hợp lệ.")
     return df
@@ -522,10 +522,10 @@ if __name__ == "__main__":
     show_homogeneity_checks(df_features)
 
     # Bước 3: Chọn bản ghi phù hợp với bài toán
-    df_cohort = apply_data_homogenization(df_features)
+    df_nhóm đối tượng nghiên cứu = apply_data_homogenization(df_features)
 
     # Bước 4: Kiểm tra & Đánh giá Nhiễu theo 2 nhóm biến (Noise & Outliers)
-    df_clean = check_noise_by_variable_groups(df_cohort, survey_year=survey_year)
+    df_clean = check_noise_by_variable_groups(df_nhóm đối tượng nghiên cứu, survey_year=survey_year)
 
     # Bước 5: Khảo sát giá trị khuyết thiếu (Missing Values)
     missing_summary = check_missing_values(df_clean)
