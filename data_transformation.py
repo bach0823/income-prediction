@@ -264,12 +264,19 @@ def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42
         "test_size": test_size,
     }
 
-def export_transformed_data(prepared: dict, output_dir: str | Path) -> dict:
-    """CSV đầu vào không chứa PERNP, nhãn hay ID; nhãn và vị trí dòng lưu riêng."""
+def export_transformed_data(prepared, output_dir):
+    """Lưu dữ liệu train/test, bảng ánh xạ và báo cáo biến đổi."""
+
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
+
     labels = prepared["labels"]
-    positions = {"train": prepared["train_rows"], "test": prepared["test_rows"]}
+    positions = {
+        "train": prepared["train_rows"],
+        "test": prepared["test_rows"],
+    }
+
+    # Thông tin chung của dữ liệu đã biến đổi
     metadata = {
         "survey_year": "2024",
         "state": "TX",
@@ -277,7 +284,10 @@ def export_transformed_data(prepared: dict, output_dir: str | Path) -> dict:
         "random_state": prepared["random_state"],
         "requested_test_size": prepared["test_size"],
         "split_method": "random shuffle before fitting tertiles; no stratification",
-        "thresholds_train_only": dict(zip(["q1", "q2"], prepared["thresholds"])),
+        "thresholds_train_only": {
+            "q1": prepared["thresholds"][0],
+            "q2": prepared["thresholds"][1],
+        },
         "label_names": LABEL_NAMES,
         "label_rule": "0: PERNP <= q1; 1: q1 < PERNP <= q2; 2: PERNP > q2",
         "annual_hours": "WKHP * WKWN (estimate; WKHP 99 means 99 or more)",
@@ -285,50 +295,78 @@ def export_transformed_data(prepared: dict, output_dir: str | Path) -> dict:
         "variants": {},
         "splits": {},
     }
+
+    # Lưu nhãn và vị trí dòng của train/test
     for split, indices in positions.items():
         labels.iloc[indices].to_csv(output / f"y_{split}.csv", index=False)
+
         pd.DataFrame({"prepared_row_id": indices}).to_csv(
             output / f"rows_{split}.csv", index=False
         )
-        counts = labels.iloc[indices].value_counts().reindex([0, 1, 2], fill_value=0)
+
+        counts = labels.iloc[indices].value_counts().reindex(
+            [0, 1, 2], fill_value=0
+        )
+
         metadata["splits"][split] = {
             "rows": len(indices),
-            "class_counts": {int(k): int(v) for k, v in counts.items()},
+            "class_counts": {
+                int(label): int(count)
+                for label, count in counts.items()
+            },
         }
+
+    # Lưu hai phiên bản dữ liệu A và B
     domains = []
+
     for variant, features in prepared["variants"].items():
         metadata["variants"][variant] = {
             "features": features.columns.tolist(),
             "feature_count": features.shape[1],
         }
+
         for split, indices in positions.items():
             features.iloc[indices].to_csv(
                 output / f"X_{variant}_{split}.csv", index=False
             )
+
+        # Ghi lại miền giá trị quan sát của từng đặc trưng
         for column in features:
-            domains.append(
-                {
-                    "variant": variant,
-                    "feature": column,
-                    "min": int(features[column].min()),
-                    "max": int(features[column].max()),
-                    "unique_values": int(features[column].nunique()),
-                }
-            )
+            domains.append({
+                "variant": variant,
+                "feature": column,
+                "min": int(features[column].min()),
+                "max": int(features[column].max()),
+                "unique_values": int(features[column].nunique()),
+            })
+
     pd.DataFrame(domains).to_csv(
         output / "feature_domains.csv", index=False, encoding="utf-8-sig"
     )
+
+    # Lưu các bảng ánh xạ mã chi tiết sang mã nhóm
     for column, table in prepared["mappings"].items():
         table.to_csv(
-            output / f"mapping_{column}.csv", index=False, encoding="utf-8-sig"
+            output / f"mapping_{column}.csv",
+            index=False,
+            encoding="utf-8-sig",
         )
-    metadata["observed_groups"] = {
-        column: int(prepared["variants"]["B_grouped"][f"{column}_GROUP"].nunique())
-        for column in prepared["mappings"]
-    }
+
+    # Đếm số nhóm thực tế xuất hiện trong dữ liệu
+    metadata["observed_groups"] = {}
+
+    for column in prepared["mappings"]:
+        group_column = f"{column}_GROUP"
+        group_count = prepared["variants"]["B_grouped"][group_column].nunique()
+        metadata["observed_groups"][column] = int(group_count)
+
+    # Lưu metadata dưới dạng JSON
     (output / "metadata.json").write_text(
-        json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8"
+        json.dumps(metadata, ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
+
+    # Tạo báo cáo mô tả quá trình biến đổi dữ liệu
     report = [
         "KẾT QUẢ BIẾN ĐỔI DỮ LIỆU TEXAS 2024 — II.3 VÀ II.4",
         f"Tổng bản ghi sau làm sạch: {len(labels):,}",
@@ -336,7 +374,7 @@ def export_transformed_data(prepared: dict, output_dir: str | Path) -> dict:
         "Cả A và B có ANNUAL_HOURS = WKHP * WKWN, là số giờ làm ước tính trong năm.",
         "Không chia bins tuổi/giờ/tuần, không chuẩn hóa, không one-hot/target encoding.",
         "scikit-learn xử lý mã nguyên bằng ngưỡng số, không phải phép chia nominal theo tập con.",
-        "II.4: Xáo trộn ngẫu nhiên 70/30 trước khi tính ngưỡng; không phân tầng theo nhãn chưa tồn tại.",
+        "II.4: Xáo trộn ngẫu nhiên trước khi tính ngưỡng; không phân tầng theo nhãn chưa tồn tại.",
         f"Seed: {prepared['random_state']}; tam phân vị chỉ tính trên train (nội suy tuyến tính mặc định pandas).",
         f"Ngưỡng: q1 = {prepared['thresholds'][0]:,.2f}; q2 = {prepared['thresholds'][1]:,.2f}",
         "Nhãn 0 (Thấp): PERNP <= q1; 1 (Trung bình): q1 < PERNP <= q2; 2 (Cao): PERNP > q2.",
@@ -344,25 +382,31 @@ def export_transformed_data(prepared: dict, output_dir: str | Path) -> dict:
         "Đây là tam phân vị mẫu không trọng số, không phải ngưỡng thu nhập dân số Texas.",
         "PERNP không xuất vào X; y và ID vị trí dòng được lưu riêng. A/B có cùng dòng, thứ tự và nhãn.",
     ]
+
     for split, info in metadata["splits"].items():
         report.append(f"{split}: {info['rows']:,} dòng")
+
         for code, count in info["class_counts"].items():
+            percentage = count / info["rows"] * 100
             report.append(
-                f"  {code} ({LABEL_NAMES[code]}): {count:,} ({count / info['rows'] * 100:.2f}%)"
+                f"  {code} ({LABEL_NAMES[code]}): {count:,} ({percentage:.2f}%)"
             )
+
     report.append(f"Số nhóm quan sát: {metadata['observed_groups']}")
-    report.extend(
-        [
-            "Kiểm chứng ánh xạ: mỗi mã từ điển chỉ có một nhóm, mã lạ gây lỗi thay vì tự gán nhóm khác.",
-            "FOD1P_GROUP = 0 là chưa có bằng cử nhân; 37 nhóm ngành + nhóm 0 trên dữ liệu hiện có.",
-            "mapping_*.csv chứa từng mã, nhãn gốc, khóa nhóm và mã nhóm để đối chiếu/trình bày phụ lục.",
-            "feature_domains.csv chứa miền giá trị quan sát; không được dùng min/max này làm quy tắc học từ test.",
-            "rows_*.csv là vị trí 0-based sau làm sạch, không phải ID Census, không đưa vào mô hình.",
-            "Chỉ chuẩn bị dữ liệu; chưa có kết quả CART/RF. Tinh chỉnh trên train/CV, test dành đánh giá cuối.",
-        ]
-    )
+    report.extend([
+        "Kiểm chứng ánh xạ: mỗi mã từ điển chỉ có một nhóm, mã lạ gây lỗi thay vì tự gán nhóm khác.",
+        "FOD1P_GROUP = 0 là chưa có bằng cử nhân; 37 nhóm ngành + nhóm 0 trên dữ liệu hiện có.",
+        "mapping_*.csv chứa từng mã, nhãn gốc, khóa nhóm và mã nhóm để đối chiếu/trình bày phụ lục.",
+        "feature_domains.csv chứa miền giá trị quan sát; không được dùng min/max này làm quy tắc học từ test.",
+        "rows_*.csv là vị trí 0-based sau làm sạch, không phải ID Census, không đưa vào mô hình.",
+        "Chỉ chuẩn bị dữ liệu; chưa có kết quả CART/RF. Tinh chỉnh trên train/CV, test dành đánh giá cuối.",
+    ])
+
     text = "\n".join(report) + "\n"
-    (output / "ket_qua_bien_doi.txt").write_text(text, encoding="utf-8")
+
+    (output / "ket_qua_bien_doi.txt").write_text(
+        text, encoding="utf-8"
+    )
+
     print("\n" + text)
     print(f"Đã xuất dữ liệu: {output.resolve()}")
-    return metadata
