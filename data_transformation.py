@@ -70,42 +70,69 @@ FOD_GROUP_NAMES = {
 }
 
 
-def load_group_mappings(dictionary_path: str | Path) -> dict[str, pd.DataFrame]:
-    """Xuất ánh xạ từng mã, phát hiện trùng mã và mã không có quy tắc rõ ràng."""
-    entries = {column: [] for column in ("OCCP", "INDP", "FOD1P")}
+def load_group_mappings(dictionary_path):
+    entries = {
+        "OCCP": [],
+        "INDP": [],
+        "FOD1P": [],
+    }
+
+    # Đọc các mã từ từ điển ACS
     with open(dictionary_path, encoding="utf-8-sig", newline="") as source:
         for row in csv.reader(source):
             if len(row) < 7 or row[0] != "VAL" or row[1] not in entries:
                 continue
-            if not row[4].isdigit():  # N/A được xử lý trước ở bước điền khuyết.
+
+            if not row[4].isdigit():
                 continue
+
             code = int(row[4])
+
             if row[4] != row[5]:
                 raise ValueError(f"Cần mã đơn để lập ánh xạ: {row}")
+
+            # Xác định nhóm của từng mã
             if row[1] == "FOD1P":
                 key = code // 100
+
                 if key not in FOD_GROUP_NAMES:
                     raise ValueError(f"Chưa có tên nhóm FOD1P {key} cho mã {code}")
+
                 label = FOD_GROUP_NAMES[key]
+
             elif code == 9920:
-                # Giữ riêng trong từ điển, tuyệt đối không nhập vào nhóm nghề/ngành khác.
-                key, label = "SPECIAL_9920", "Mã đặc biệt 9920"
+                key = "SPECIAL_9920"
+                label = "Mã đặc biệt 9920"
+
             else:
-                key, separator, _ = row[6].partition("-")
-                if not separator or not key.isalpha():
+                if "-" not in row[6]:
                     raise ValueError(f"Không nhận diện được nhóm: {row}")
+
+                key = row[6].split("-")[0]
+
+                if not key.isalpha():
+                    raise ValueError(f"Không nhận diện được nhóm: {row}")
+
                 label = key
+
             entries[row[1]].append((code, row[6], key, label))
 
+    # Tạo bảng ánh xạ cho từng biến
     mappings = {}
+
     for column, records in entries.items():
         if not records:
             raise ValueError(f"Từ điển thiếu {column}")
+
         table = pd.DataFrame(
-            records, columns=["raw_code", "raw_label", "group_key", "group_label"]
+            records,
+            columns=["raw_code", "raw_label", "group_key", "group_label"]
         )
-        if table.raw_code.duplicated().any():
+
+        if table["raw_code"].duplicated().any():
             raise ValueError(f"Trùng mã/ánh xạ chồng lấn trong {column}")
+
+        # Gán mã nhóm
         if column == "FOD1P":
             table.loc[len(table)] = [
                 0,
@@ -113,15 +140,27 @@ def load_group_mappings(dictionary_path: str | Path) -> dict[str, pd.DataFrame]:
                 0,
                 FOD_GROUP_NAMES[0],
             ]
-            table["group_code"] = table.group_key.astype(int)
-        else:
-            # Thứ tự cố định từ từ điển đầy đủ, không đổi theo các nhóm xuất hiện trên train/test.
-            order = table.groupby("group_key").raw_code.min().sort_values().index
-            codes = {key: number for number, key in enumerate(order, start=1)}
-            table["group_code"] = table.group_key.map(codes).astype(int)
-        mappings[column] = table.sort_values("raw_code").reset_index(drop=True)
-    return mappings
 
+            table["group_code"] = table["group_key"].astype(int)
+
+        else:
+            group_order = (
+                table.groupby("group_key")["raw_code"]
+                .min()
+                .sort_values()
+                .index
+            )
+
+            group_codes = {
+                key: number
+                for number, key in enumerate(group_order, start=1)
+            }
+
+            table["group_code"] = table["group_key"].map(group_codes).astype(int)
+
+        mappings[column] = table.sort_values("raw_code").reset_index(drop=True)
+
+    return mappings
 
 def label_income(earnings: pd.Series, thresholds: tuple[float, float]) -> pd.Series:
     """Giữ đồng hạng cùng lớp: <= q1; (q1, q2]; > q2."""
