@@ -11,7 +11,7 @@ Quy trình thực thi theo chuẩn khoa học dữ liệu:
 5. Khảo sát & Xử lý giá trị khuyết thiếu (Missing Values Audit & Imputation):
    - Khảo sát tỷ lệ khuyết thiếu (isna trên các thuộc tính).
    - Điền giá trị khuyết thiếu bằng 0 cho ENG (chỉ nói tiếng Anh) và FOD1P (chưa có bằng cử nhân).
-6. II.3–II.4: tạo ANNUAL_HOURS, hai phiên bản chi tiết/gom nhóm, chia 70/30 và gán nhãn tam phân vị train.
+6. Bàn giao dữ liệu đã xử lý cho data_transformation.py để tạo các phiên bản dữ liệu và nhãn thu nhập.
 """
 
 import csv
