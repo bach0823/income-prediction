@@ -162,88 +162,107 @@ def load_group_mappings(dictionary_path):
 
     return mappings
 
-def label_income(earnings: pd.Series, thresholds: tuple[float, float]) -> pd.Series:
-    """Giữ đồng hạng cùng lớp: <= q1; (q1, q2]; > q2."""
-    q1, q2 = thresholds
-    if not np.isfinite([q1, q2]).all() or q1 >= q2:
-        raise ValueError("Hai ngưỡng tam phân vị phải hữu hạn và q1 < q2.")
-    values = pd.to_numeric(earnings, errors="raise")
-    if values.isna().any() or not np.isfinite(values).all() or (values <= 0).any():
-        raise ValueError("PERNP phải hữu hạn, không khuyết và dương.")
-    return pd.Series(
-        np.select([values <= q1, values <= q2], [0, 1], default=2),
-        index=earnings.index,
-        name="INCOME_CLASS",
-        dtype="int64",
-    )
 
+def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42):
+    """Tạo hai phiên bản dữ liệu A và B, cùng nhãn và cùng cách chia train/test."""
 
-def prepare_transformed_data(
-    df: pd.DataFrame,
-    dictionary_path: str | Path,
-    test_size: float = 0.3,
-    random_state: int = 42,
-) -> dict:
-    """Nhận dữ liệu đã làm sạch/điền khuyết, tạo hai phiên bản có cùng dòng và nhãn."""
+    # 1. Kiểm tra các cột cần thiết
     required = BASE_FEATURES + ["PERNP"]
+
     missing = set(required) - set(df.columns)
     if missing:
         raise ValueError(
             f"Thiếu cột biến đổi (cần WKWN thực tế, không dùng WKW): {sorted(missing)}"
         )
+
     if len(df) < 10:
         raise ValueError("Cần ít nhất 10 dòng để chia dữ liệu và tạo ba lớp.")
+
+    # 2. Chuyển dữ liệu sang dạng số và kiểm tra dữ liệu
     data = df[required].apply(pd.to_numeric, errors="raise").reset_index(drop=True)
+
     if data.isna().any().any() or not np.isfinite(data.to_numpy()).all():
         raise ValueError("Dữ liệu biến đổi phải hữu hạn và đã điền khuyết.")
+
     if data.mod(1).ne(0).any().any():
         raise ValueError("Không ép kiểu che giá trị thập phân sai mã.")
+
     if not data.WKHP.between(1, 99).all() or not data.WKWN.between(1, 52).all():
         raise ValueError("WKHP/WKWN sai miền để tính ANNUAL_HOURS.")
+
     if (
         not data.AGEP.between(18, 99).all()
         or (data.PERNP <= 0).any()
         or (data.COW == 8).any()
     ):
         raise ValueError("Còn bản ghi ngoài phạm vi bài toán.")
+
+    # 3. Đọc bảng ánh xạ các nhóm mã
     mappings = load_group_mappings(dictionary_path)
-    # Chỉ một lần chia ngẫu nhiên, trước khi tính ngưỡng. Không dùng test để phân tầng nhãn.
+
+    # 4. Chia train/test trước khi tính ngưỡng thu nhập
     train_rows, test_rows = train_test_split(
         np.arange(len(data)),
         test_size=test_size,
         random_state=random_state,
         shuffle=True,
     )
+
+    # Chỉ dùng thu nhập trong tập train để tính Q1 và Q2
     quantiles = data.PERNP.iloc[train_rows].quantile([1 / 3, 2 / 3])
-    thresholds = (float(quantiles.iloc[0]), float(quantiles.iloc[1]))
-    labels = label_income(data.PERNP, thresholds)
+    q1 = quantiles.iloc[0]
+    q2 = quantiles.iloc[1]
+
+    # 5. Phân chia thu nhập thành ba lớp
+    labels = pd.Series(index=data.index, dtype="int64")
+
+    labels[data.PERNP <= q1] = 0
+    labels[(data.PERNP > q1) & (data.PERNP <= q2)] = 1
+    labels[data.PERNP > q2] = 2
+
+    labels.name = "INCOME_CLASS"
+
     if labels.iloc[train_rows].nunique() != 3:
         raise ValueError(
             "Train không tạo đủ ba lớp; cần kiểm tra phân phối/đồng hạng PERNP."
         )
 
+    # 6. Tạo phiên bản A: giữ các mã chi tiết
     detailed = data[BASE_FEATURES].astype("int64").copy()
-    # Đây là ước tính; WKHP == 99 là top-code nên không phải số giờ chính xác.
+
+    # Đây là số giờ làm việc ước tính trong năm
+    # WKHP == 99 là top-code nên không phải số giờ chính xác
     detailed["ANNUAL_HOURS"] = detailed.WKHP * detailed.WKWN
+
+    # 7. Tạo phiên bản B: thay các mã chi tiết bằng mã nhóm
     grouped = detailed.copy()
+
     for column, table in mappings.items():
-        values = data[column].map(table.set_index("raw_code").group_code)
+        values = data[column].map(
+            table.set_index("raw_code")["group_code"]
+        )
+
         if values.isna().any():
             unknown = data.loc[values.isna(), column].unique().tolist()
             raise ValueError(f"Mã {column} không có ánh xạ: {unknown[:10]}")
+
         grouped = grouped.rename(columns={column: f"{column}_GROUP"})
         grouped[f"{column}_GROUP"] = values.astype("int64")
+
+    # 8. Trả về dữ liệu và thông tin cần thiết cho các bước tiếp theo
     return {
-        "variants": {"A_detailed": detailed, "B_grouped": grouped},
+        "variants": {
+            "A_detailed": detailed,
+            "B_grouped": grouped,
+        },
         "labels": labels,
         "train_rows": train_rows,
         "test_rows": test_rows,
-        "thresholds": thresholds,
+        "thresholds": (float(q1), float(q2)),
         "mappings": mappings,
         "random_state": random_state,
         "test_size": test_size,
     }
-
 
 def export_transformed_data(prepared: dict, output_dir: str | Path) -> dict:
     """CSV đầu vào không chứa PERNP, nhãn hay ID; nhãn và vị trí dòng lưu riêng."""
