@@ -214,13 +214,18 @@ def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42
     q2 = quantiles.iloc[1]
 
     # 5. Phân chia thu nhập thành ba lớp
-    labels = pd.Series(index=data.index, dtype="int64")
-
-    labels[data.PERNP <= q1] = 0
-    labels[(data.PERNP > q1) & (data.PERNP <= q2)] = 1
-    labels[data.PERNP > q2] = 2
-
-    labels.name = "INCOME_CLASS"
+    labels = pd.Series(
+        np.select(
+            [
+                data.PERNP <= q1,
+                data.PERNP <= q2,
+            ],
+            [0, 1],
+            default=2,
+        ),
+        index=data.index,
+        name="INCOME_CLASS",
+    )
 
     if labels.iloc[train_rows].nunique() != 3:
         raise ValueError(
