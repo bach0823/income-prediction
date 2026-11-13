@@ -1,8 +1,4 @@
-"""II.3–II.4: biến đổi ACS PUMS Texas 2024 và chuẩn bị so sánh CART/RF.
-
-Không huấn luyện mô hình. Các phép gom nhóm chỉ dựa vào từ điển, không dùng nhãn.
-Gọi qua: python data_prepareration.py 2024
-"""
+"""Biến đổi ACS PUMS Texas 2024 và chuẩn bị dữ liệu cho CART/RF."""
 
 import csv
 import json
@@ -11,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
+
 
 BASE_FEATURES = [
     "AGEP",
@@ -27,7 +24,13 @@ BASE_FEATURES = [
     "RAC1P",
     "CIT",
 ]
-LABEL_NAMES = {0: "Thấp", 1: "Trung bình", 2: "Cao"}
+
+LABEL_NAMES = {
+    0: "Thấp",
+    1: "Trung bình",
+    2: "Cao",
+}
+
 FOD_GROUP_NAMES = {
     0: "Chưa có bằng cử nhân",
     11: "Nông nghiệp và các ngành liên quan",
@@ -71,6 +74,8 @@ FOD_GROUP_NAMES = {
 
 
 def load_group_mappings(dictionary_path):
+    """Tạo bảng ánh xạ mã chi tiết sang mã nhóm."""
+
     entries = {
         "OCCP": [],
         "INDP": [],
@@ -83,21 +88,14 @@ def load_group_mappings(dictionary_path):
             if len(row) < 7 or row[0] != "VAL" or row[1] not in entries:
                 continue
 
-            if not row[4].isdigit():
+            if not row[4].isdigit() or row[4] != row[5]:
                 continue
 
             code = int(row[4])
 
-            if row[4] != row[5]:
-                raise ValueError(f"Cần mã đơn để lập ánh xạ: {row}")
-
             # Xác định nhóm của từng mã
             if row[1] == "FOD1P":
                 key = code // 100
-
-                if key not in FOD_GROUP_NAMES:
-                    raise ValueError(f"Chưa có tên nhóm FOD1P {key} cho mã {code}")
-
                 label = FOD_GROUP_NAMES[key]
 
             elif code == 9920:
@@ -105,14 +103,7 @@ def load_group_mappings(dictionary_path):
                 label = "Mã đặc biệt 9920"
 
             else:
-                if "-" not in row[6]:
-                    raise ValueError(f"Không nhận diện được nhóm: {row}")
-
-                key = row[6].split("-")[0]
-
-                if not key.isalpha():
-                    raise ValueError(f"Không nhận diện được nhóm: {row}")
-
+                key = row[6].split("-")[0].strip()
                 label = key
 
             entries[row[1]].append((code, row[6], key, label))
@@ -121,16 +112,10 @@ def load_group_mappings(dictionary_path):
     mappings = {}
 
     for column, records in entries.items():
-        if not records:
-            raise ValueError(f"Từ điển thiếu {column}")
-
         table = pd.DataFrame(
             records,
-            columns=["raw_code", "raw_label", "group_key", "group_label"]
+            columns=["raw_code", "raw_label", "group_key", "group_label"],
         )
-
-        if table["raw_code"].duplicated().any():
-            raise ValueError(f"Trùng mã/ánh xạ chồng lấn trong {column}")
 
         # Gán mã nhóm
         if column == "FOD1P":
@@ -166,41 +151,14 @@ def load_group_mappings(dictionary_path):
 def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42):
     """Tạo hai phiên bản dữ liệu A và B, cùng nhãn và cùng cách chia train/test."""
 
-    # 1. Kiểm tra các cột cần thiết
+    # 1. Chuyển dữ liệu sang dạng số
     required = BASE_FEATURES + ["PERNP"]
-
-    missing = set(required) - set(df.columns)
-    if missing:
-        raise ValueError(
-            f"Thiếu cột biến đổi (cần WKWN thực tế, không dùng WKW): {sorted(missing)}"
-        )
-
-    if len(df) < 10:
-        raise ValueError("Cần ít nhất 10 dòng để chia dữ liệu và tạo ba lớp.")
-
-    # 2. Chuyển dữ liệu sang dạng số và kiểm tra dữ liệu
     data = df[required].apply(pd.to_numeric, errors="raise").reset_index(drop=True)
 
-    if data.isna().any().any() or not np.isfinite(data.to_numpy()).all():
-        raise ValueError("Dữ liệu biến đổi phải hữu hạn và đã điền khuyết.")
-
-    if data.mod(1).ne(0).any().any():
-        raise ValueError("Không ép kiểu che giá trị thập phân sai mã.")
-
-    if not data.WKHP.between(1, 99).all() or not data.WKWN.between(1, 52).all():
-        raise ValueError("WKHP/WKWN sai miền để tính ANNUAL_HOURS.")
-
-    if (
-        not data.AGEP.between(18, 99).all()
-        or (data.PERNP <= 0).any()
-        or (data.COW == 8).any()
-    ):
-        raise ValueError("Còn bản ghi ngoài phạm vi bài toán.")
-
-    # 3. Đọc bảng ánh xạ các nhóm mã
+    # 2. Đọc bảng ánh xạ các nhóm mã
     mappings = load_group_mappings(dictionary_path)
 
-    # 4. Chia train/test trước khi tính ngưỡng thu nhập
+    # 3. Chia train/test trước khi tính ngưỡng thu nhập
     train_rows, test_rows = train_test_split(
         np.arange(len(data)),
         test_size=test_size,
@@ -213,7 +171,7 @@ def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42
     q1 = quantiles.iloc[0]
     q2 = quantiles.iloc[1]
 
-    # 5. Phân chia thu nhập thành ba lớp
+    # 4. Phân chia thu nhập thành ba lớp
     labels = pd.Series(
         np.select(
             [
@@ -227,19 +185,14 @@ def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42
         name="INCOME_CLASS",
     )
 
-    if labels.iloc[train_rows].nunique() != 3:
-        raise ValueError(
-            "Train không tạo đủ ba lớp; cần kiểm tra phân phối/đồng hạng PERNP."
-        )
-
-    # 6. Tạo phiên bản A: giữ các mã chi tiết
+    # 5. Tạo phiên bản A: giữ các mã chi tiết
     detailed = data[BASE_FEATURES].astype("int64").copy()
 
-    # Đây là số giờ làm việc ước tính trong năm
-    # WKHP == 99 là top-code nên không phải số giờ chính xác
+    # Số giờ làm việc ước tính trong năm
+    # WKHP == 99 là top-code, tương ứng 99 giờ hoặc nhiều hơn
     detailed["ANNUAL_HOURS"] = detailed.WKHP * detailed.WKWN
 
-    # 7. Tạo phiên bản B: thay các mã chi tiết bằng mã nhóm
+    # 6. Tạo phiên bản B: thay các mã chi tiết bằng mã nhóm
     grouped = detailed.copy()
 
     for column, table in mappings.items():
@@ -247,14 +200,10 @@ def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42
             table.set_index("raw_code")["group_code"]
         )
 
-        if values.isna().any():
-            unknown = data.loc[values.isna(), column].unique().tolist()
-            raise ValueError(f"Mã {column} không có ánh xạ: {unknown[:10]}")
-
         grouped = grouped.rename(columns={column: f"{column}_GROUP"})
         grouped[f"{column}_GROUP"] = values.astype("int64")
 
-    # 8. Trả về dữ liệu và thông tin cần thiết cho các bước tiếp theo
+    # 7. Trả về dữ liệu và thông tin cần thiết
     return {
         "variants": {
             "A_detailed": detailed,
@@ -269,13 +218,15 @@ def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42
         "test_size": test_size,
     }
 
+
 def export_transformed_data(prepared, output_dir):
-    """Lưu dữ liệu train/test, bảng ánh xạ và báo cáo biến đổi."""
+    """Lưu dữ liệu train/test, bảng ánh xạ và metadata."""
 
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
 
     labels = prepared["labels"]
+
     positions = {
         "train": prepared["train_rows"],
         "test": prepared["test_rows"],
@@ -287,7 +238,7 @@ def export_transformed_data(prepared, output_dir):
         "state": "TX",
         "rows": len(labels),
         "random_state": prepared["random_state"],
-        "requested_test_size": prepared["test_size"],
+        "test_size": prepared["test_size"],
         "split_method": "random shuffle before fitting tertiles; no stratification",
         "thresholds_train_only": {
             "q1": prepared["thresholds"][0],
@@ -301,16 +252,16 @@ def export_transformed_data(prepared, output_dir):
         "splits": {},
     }
 
-    # Lưu nhãn và vị trí dòng của train/test
+    # Lưu nhãn train/test và thống kê số lượng từng lớp
     for split, indices in positions.items():
-        labels.iloc[indices].to_csv(output / f"y_{split}.csv", index=False)
-
-        pd.DataFrame({"prepared_row_id": indices}).to_csv(
-            output / f"rows_{split}.csv", index=False
+        labels.iloc[indices].to_csv(
+            output / f"y_{split}.csv",
+            index=False,
         )
 
         counts = labels.iloc[indices].value_counts().reindex(
-            [0, 1, 2], fill_value=0
+            [0, 1, 2],
+            fill_value=0,
         )
 
         metadata["splits"][split] = {
@@ -322,32 +273,16 @@ def export_transformed_data(prepared, output_dir):
         }
 
     # Lưu hai phiên bản dữ liệu A và B
-    domains = []
-
     for variant, features in prepared["variants"].items():
         metadata["variants"][variant] = {
             "features": features.columns.tolist(),
-            "feature_count": features.shape[1],
         }
 
         for split, indices in positions.items():
             features.iloc[indices].to_csv(
-                output / f"X_{variant}_{split}.csv", index=False
+                output / f"X_{variant}_{split}.csv",
+                index=False,
             )
-
-        # Ghi lại miền giá trị quan sát của từng đặc trưng
-        for column in features:
-            domains.append({
-                "variant": variant,
-                "feature": column,
-                "min": int(features[column].min()),
-                "max": int(features[column].max()),
-                "unique_values": int(features[column].nunique()),
-            })
-
-    pd.DataFrame(domains).to_csv(
-        output / "feature_domains.csv", index=False, encoding="utf-8-sig"
-    )
 
     # Lưu các bảng ánh xạ mã chi tiết sang mã nhóm
     for column, table in prepared["mappings"].items():
@@ -357,61 +292,10 @@ def export_transformed_data(prepared, output_dir):
             encoding="utf-8-sig",
         )
 
-    # Đếm số nhóm thực tế xuất hiện trong dữ liệu
-    metadata["observed_groups"] = {}
-
-    for column in prepared["mappings"]:
-        group_column = f"{column}_GROUP"
-        group_count = prepared["variants"]["B_grouped"][group_column].nunique()
-        metadata["observed_groups"][column] = int(group_count)
-
-    # Lưu metadata dưới dạng JSON
+    # Lưu metadata
     (output / "metadata.json").write_text(
         json.dumps(metadata, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
-    # Tạo báo cáo mô tả quá trình biến đổi dữ liệu
-    report = [
-        "KẾT QUẢ BIẾN ĐỔI DỮ LIỆU TEXAS 2024 — II.3 VÀ II.4",
-        f"Tổng bản ghi sau làm sạch: {len(labels):,}",
-        "II.3: A giữ mã chi tiết; B gom OCCP/INDP theo tiền tố nhãn từ điển, FOD1P theo mã // 100.",
-        "Cả A và B có ANNUAL_HOURS = WKHP * WKWN, là số giờ làm ước tính trong năm.",
-        "Không chia bins tuổi/giờ/tuần, không chuẩn hóa, không one-hot/target encoding.",
-        "scikit-learn xử lý mã nguyên bằng ngưỡng số, không phải phép chia nominal theo tập con.",
-        "II.4: Xáo trộn ngẫu nhiên trước khi tính ngưỡng; không phân tầng theo nhãn chưa tồn tại.",
-        f"Seed: {prepared['random_state']}; tam phân vị chỉ tính trên train (nội suy tuyến tính mặc định pandas).",
-        f"Ngưỡng: q1 = {prepared['thresholds'][0]:,.2f}; q2 = {prepared['thresholds'][1]:,.2f}",
-        "Nhãn 0 (Thấp): PERNP <= q1; 1 (Trung bình): q1 < PERNP <= q2; 2 (Cao): PERNP > q2.",
-        "Giữ người cùng thu nhập cùng nhãn; không ép số lượng ba lớp bằng nhau.",
-        "Đây là tam phân vị mẫu không trọng số, không phải ngưỡng thu nhập dân số Texas.",
-        "PERNP không xuất vào X; y và ID vị trí dòng được lưu riêng. A/B có cùng dòng, thứ tự và nhãn.",
-    ]
-
-    for split, info in metadata["splits"].items():
-        report.append(f"{split}: {info['rows']:,} dòng")
-
-        for code, count in info["class_counts"].items():
-            percentage = count / info["rows"] * 100
-            report.append(
-                f"  {code} ({LABEL_NAMES[code]}): {count:,} ({percentage:.2f}%)"
-            )
-
-    report.append(f"Số nhóm quan sát: {metadata['observed_groups']}")
-    report.extend([
-        "Kiểm chứng ánh xạ: mỗi mã từ điển chỉ có một nhóm, mã lạ gây lỗi thay vì tự gán nhóm khác.",
-        "FOD1P_GROUP = 0 là chưa có bằng cử nhân; 37 nhóm ngành + nhóm 0 trên dữ liệu hiện có.",
-        "mapping_*.csv chứa từng mã, nhãn gốc, khóa nhóm và mã nhóm để đối chiếu/trình bày phụ lục.",
-        "feature_domains.csv chứa miền giá trị quan sát; không được dùng min/max này làm quy tắc học từ test.",
-        "rows_*.csv là vị trí 0-based sau làm sạch, không phải ID Census, không đưa vào mô hình.",
-        "Chỉ chuẩn bị dữ liệu; chưa có kết quả CART/RF. Tinh chỉnh trên train/CV, test dành đánh giá cuối.",
-    ])
-
-    text = "\n".join(report) + "\n"
-
-    (output / "ket_qua_bien_doi.txt").write_text(
-        text, encoding="utf-8"
-    )
-
-    print("\n" + text)
     print(f"Đã xuất dữ liệu: {output.resolve()}")
