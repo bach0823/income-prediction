@@ -156,21 +156,17 @@ if __name__ == "__main__":
     # 5. Thống kê cơ bản
     show_basic_statistics(df)
 
-    # 6. Chuyển sang module biến đổi dữ liệu để tạo nhãn thu nhập.
+    # 6. Tạo nhãn thu nhập và lưu dữ liệu đã biến đổi.
     if survey_year == "2024":
-        from data_transformation import (
-            export_transformed_data,
-            prepare_transformed_data,
-        )
+        from data_transformation import prepare_transformed_data, export_transformed_data
 
         project_dir = Path(__file__).resolve().parent
-        dictionary_path = (
-            project_dir / "data" / "pums" / "data_dict_2024"
-            / "PUMS_Data_Dictionary_2024.csv"
-        )
+        dictionary_path = project_dir / "data/pums/data_dict_2024/PUMS_Data_Dictionary_2024.csv"
+        output_dir = project_dir / "data/processed/texas_2024"
 
-        prepared = prepare_transformed_data(df, dictionary_path)
-        output_dir = project_dir / "data" / "processed" / "texas_2024"
-        export_transformed_data(prepared, output_dir)
+        export_transformed_data(
+            prepare_transformed_data(df, dictionary_path),
+            output_dir,
+        )
     else:
-        print("Module biến đổi hiện chỉ được thiết lập cho dữ liệu năm 2024.")
+        print("Chỉ hỗ trợ biến đổi dữ liệu năm 2024.")
