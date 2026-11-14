@@ -68,7 +68,7 @@ def make_search(model_name):
         model = RandomForestClassifier(
             criterion="gini",
             random_state=RANDOM_STATE,
-            n_jobs=1,
+            n_jobs=-1,
         )
         params = {
             "n_estimators": [100, 200],
@@ -99,7 +99,7 @@ def run_experiments():
         x_test = data["X"][version]["test"]
 
         for model_name in ("CART", "RandomForest"):
-            print(f"\n[{version} / {model_name}] Đang huấn luyện...", flush=True)
+            print(f"\\n[{version} / {model_name}] Đang huấn luyện...", flush=True)
 
             search = make_search(model_name)
             search.fit(x_train, y_train)
@@ -183,9 +183,9 @@ def run_experiments():
     # Chỉ dùng CV Macro-F1 để xếp hạng, không chọn mô hình theo kết quả test.
     best = comparison.iloc[0]
 
-    print("\nSo sánh các mô hình:")
+    print("\\nSo sánh các mô hình:")
     print(comparison.to_string(index=False))
-    print(f"\nMô hình được ưu tiên theo CV: {best['variant']} / {best['model']}")
+    print(f"\\nMô hình được ưu tiên theo CV: {best['variant']} / {best['model']}")
     print(f"Đã lưu kết quả tại: {OUTPUT_DIR.resolve()}")
 
     return comparison
