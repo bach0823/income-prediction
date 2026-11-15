@@ -82,9 +82,9 @@ def load_group_mappings(dictionary_path):
         "FOD1P": [],
     }
 
-    # Đọc các mã từ từ điển ACS
-    with open(dictionary_path, encoding="utf-8-sig", newline="") as source:
-        for row in csv.reader(source):
+    # Đọc mã thuộc tính từ Data Dictionary
+    with open(dictionary_path, encoding="utf-8-sig", newline="") as file:
+        for row in csv.reader(file):
             if len(row) < 7 or row[0] != "VAL" or row[1] not in entries:
                 continue
 
@@ -93,31 +93,37 @@ def load_group_mappings(dictionary_path):
 
             code = int(row[4])
 
-            # Xác định nhóm của từng mã
+            # Xác định nhóm của mã
             if row[1] == "FOD1P":
-                key = code // 100
-                label = FOD_GROUP_NAMES[key]
+                group_key = code // 100
+                group_label = FOD_GROUP_NAMES[group_key]
 
             elif code == 9920:
-                key = "SPECIAL_9920"
-                label = "Mã đặc biệt 9920"
+                group_key = "SPECIAL_9920"
+                group_label = "Mã đặc biệt 9920"
 
             else:
-                key = row[6].split("-")[0].strip()
-                label = key
+                group_key = row[6].split("-")[0].strip()
+                group_label = group_key
 
-            entries[row[1]].append((code, row[6], key, label))
+            entries[row[1]].append(
+                (code, row[6], group_key, group_label)
+            )
 
-    # Tạo bảng ánh xạ cho từng biến
+    # Tạo bảng ánh xạ cho từng thuộc tính
     mappings = {}
 
     for column, records in entries.items():
         table = pd.DataFrame(
             records,
-            columns=["raw_code", "raw_label", "group_key", "group_label"],
+            columns=[
+                "raw_code",
+                "raw_label",
+                "group_key",
+                "group_label",
+            ],
         )
 
-        # Gán mã nhóm
         if column == "FOD1P":
             table.loc[len(table)] = [
                 0,
@@ -130,7 +136,6 @@ def load_group_mappings(dictionary_path):
 
         else:
             group_min_codes = table.groupby("group_key")["raw_code"].min()
-
             group_order = group_min_codes.sort_values().index
 
             group_codes = {}
@@ -138,7 +143,9 @@ def load_group_mappings(dictionary_path):
             for number, key in enumerate(group_order, start=1):
                 group_codes[key] = number
 
-            table["group_code"] = table["group_key"].map(group_codes).astype(int)
+            table["group_code"] = (
+                table["group_key"].map(group_codes).astype(int)
+            )
 
         mappings[column] = table.sort_values("raw_code").reset_index(drop=True)
 
@@ -148,15 +155,16 @@ def load_group_mappings(dictionary_path):
 def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42):
     """Tạo hai phiên bản dữ liệu A và B, cùng nhãn và cùng cách chia train/test."""
 
-    # 1. Chọn các thuộc tính và chuyển sang dạng số
+    # 1. Chọn các thuộc tính nghiên cứu và chuyển sang dạng số
     data = df[BASE_FEATURES + ["PERNP"]].apply(
-        pd.to_numeric, errors="raise"
+        pd.to_numeric,
+        errors="raise",
     ).reset_index(drop=True)
 
     # 2. Tạo bảng ánh xạ mã chi tiết sang mã nhóm
     mappings = load_group_mappings(dictionary_path)
 
-    # 3. Chia dữ liệu thành train và test
+    # 3. Chia dữ liệu thành tập train và test
     train_rows, test_rows = train_test_split(
         np.arange(len(data)),
         test_size=test_size,
@@ -164,11 +172,11 @@ def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42
         shuffle=True,
     )
 
-    # 4. Tính hai ngưỡng thu nhập từ tập train
+    # 4. Tính ngưỡng thu nhập từ tập train
     q1 = data["PERNP"].iloc[train_rows].quantile(1 / 3)
     q2 = data["PERNP"].iloc[train_rows].quantile(2 / 3)
 
-    # 5. Tạo ba lớp thu nhập
+    # 5. Phân loại thu nhập thành ba nhóm
     labels = pd.Series(
         np.select(
             [
@@ -182,21 +190,23 @@ def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42
         name="INCOME_CLASS",
     )
 
-    # 6. Tạo phiên bản A: giữ mã chi tiết
+    # 6. Phiên bản A: giữ nguyên mã thuộc tính chi tiết
     detailed = data[BASE_FEATURES].astype("int64").copy()
 
     # Ước tính tổng số giờ làm việc trong năm
     # WKHP = 99 biểu thị 99 giờ hoặc nhiều hơn mỗi tuần
     detailed["ANNUAL_HOURS"] = detailed["WKHP"] * detailed["WKWN"]
 
-    # 7. Tạo phiên bản B: thay mã chi tiết bằng mã nhóm
+    # 7. Phiên bản B: thay mã chi tiết bằng mã nhóm
     grouped = detailed.copy()
 
     for column, table in mappings.items():
         group_codes = table.set_index("raw_code")["group_code"]
 
         grouped = grouped.rename(columns={column: f"{column}_GROUP"})
-        grouped[f"{column}_GROUP"] = data[column].map(group_codes).astype("int64")
+        grouped[f"{column}_GROUP"] = (
+            data[column].map(group_codes).astype("int64")
+        )
 
     # 8. Trả về dữ liệu và thông tin cần thiết
     return {
@@ -227,7 +237,7 @@ def export_transformed_data(prepared, output_dir):
         "test": prepared["test_rows"],
     }
 
-    # Thông tin chung của dữ liệu đã biến đổi
+    # 1. Tạo thông tin chung
     metadata = {
         "survey_year": "2024",
         "state": "TX",
@@ -247,7 +257,7 @@ def export_transformed_data(prepared, output_dir):
         "splits": {},
     }
 
-    # Lưu nhãn train/test và thống kê số lượng từng lớp
+    # 2. Lưu nhãn train/test và thống kê số lượng từng lớp
     for split, indices in positions.items():
         labels.iloc[indices].to_csv(
             output / f"y_{split}.csv",
@@ -259,15 +269,17 @@ def export_transformed_data(prepared, output_dir):
             fill_value=0,
         )
 
+        class_counts = {}
+
+        for label, count in counts.items():
+            class_counts[int(label)] = int(count)
+
         metadata["splits"][split] = {
             "rows": len(indices),
-            "class_counts": {
-                int(label): int(count)
-                for label, count in counts.items()
-            },
+            "class_counts": class_counts,
         }
 
-    # Lưu hai phiên bản dữ liệu A và B
+    # 3. Lưu hai phiên bản dữ liệu A và B
     for variant, features in prepared["variants"].items():
         metadata["variants"][variant] = {
             "features": features.columns.tolist(),
@@ -279,7 +291,7 @@ def export_transformed_data(prepared, output_dir):
                 index=False,
             )
 
-    # Lưu các bảng ánh xạ mã chi tiết sang mã nhóm
+    # 4. Lưu các bảng ánh xạ
     for column, table in prepared["mappings"].items():
         table.to_csv(
             output / f"mapping_{column}.csv",
@@ -287,10 +299,8 @@ def export_transformed_data(prepared, output_dir):
             encoding="utf-8-sig",
         )
 
-    # Lưu metadata
-    (output / "metadata.json").write_text(
-        json.dumps(metadata, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    # 5. Lưu metadata
+    with open(output / "metadata.json", "w", encoding="utf-8") as file:
+        json.dump(metadata, file, ensure_ascii=False, indent=2)
 
     print(f"Đã xuất dữ liệu: {output}")
