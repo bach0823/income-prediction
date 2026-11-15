@@ -129,17 +129,14 @@ def load_group_mappings(dictionary_path):
             table["group_code"] = table["group_key"].astype(int)
 
         else:
-            group_order = (
-                table.groupby("group_key")["raw_code"]
-                .min()
-                .sort_values()
-                .index
-            )
+            group_min_codes = table.groupby("group_key")["raw_code"].min()
 
-            group_codes = {
-                key: number
-                for number, key in enumerate(group_order, start=1)
-            }
+            group_order = group_min_codes.sort_values().index
+
+            group_codes = {}
+
+            for number, key in enumerate(group_order, start=1):
+                group_codes[key] = number
 
             table["group_code"] = table["group_key"].map(group_codes).astype(int)
 
@@ -298,4 +295,4 @@ def export_transformed_data(prepared, output_dir):
         encoding="utf-8",
     )
 
-    print(f"Đã xuất dữ liệu: {output.resolve()}")
+    print(f"Đã xuất dữ liệu: {output}")
