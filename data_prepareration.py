@@ -12,14 +12,12 @@ Các bước:
 """
 
 import sys
-from pathlib import Path
 
 from folktables import ACSDataSource
 
 
-# Đường dẫn thư mục gốc của dự án và dữ liệu ACS PUMS.
-PROJECT_DIR = Path(__file__).resolve().parent
-DATA_PATH = str(PROJECT_DIR / "data/pums")
+# Đường dẫn tương đối đến thư mục chứa dữ liệu ACS PUMS.
+DATA_PATH = "data/pums"
 
 # 14 thuộc tính được sử dụng trong nghiên cứu.
 STUDY_FEATURES = [
@@ -130,14 +128,17 @@ if __name__ == "__main__":
 
     # 6. Tạo nhãn thu nhập và lưu dữ liệu đã biến đổi
     if survey_year == "2024":
-        from data_transformation import prepare_transformed_data, export_transformed_data
+        from data_transformation import (
+            prepare_transformed_data,
+            export_transformed_data,
+        )
 
         export_transformed_data(
             prepare_transformed_data(
                 df,
-                PROJECT_DIR / "data/pums/data_dict_2024/PUMS_Data_Dictionary_2024.csv",
+                "data/pums/data_dict_2024/PUMS_Data_Dictionary_2024.csv",
             ),
-            PROJECT_DIR / "data/processed/texas_2024",
+            "data/processed/texas_2024",
         )
     else:
         print("Chỉ hỗ trợ biến đổi dữ liệu năm 2024.")
