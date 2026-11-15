@@ -148,14 +148,15 @@ def load_group_mappings(dictionary_path):
 def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42):
     """Tạo hai phiên bản dữ liệu A và B, cùng nhãn và cùng cách chia train/test."""
 
-    # 1. Chuyển dữ liệu sang dạng số
-    required = BASE_FEATURES + ["PERNP"]
-    data = df[required].apply(pd.to_numeric, errors="raise").reset_index(drop=True)
+    # 1. Chọn các thuộc tính và chuyển sang dạng số
+    data = df[BASE_FEATURES + ["PERNP"]].apply(
+        pd.to_numeric, errors="raise"
+    ).reset_index(drop=True)
 
-    # 2. Đọc bảng ánh xạ các nhóm mã
+    # 2. Tạo bảng ánh xạ mã chi tiết sang mã nhóm
     mappings = load_group_mappings(dictionary_path)
 
-    # 3. Chia train/test trước khi tính ngưỡng thu nhập
+    # 3. Chia dữ liệu thành train và test
     train_rows, test_rows = train_test_split(
         np.arange(len(data)),
         test_size=test_size,
@@ -163,17 +164,16 @@ def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42
         shuffle=True,
     )
 
-    # Chỉ dùng thu nhập trong tập train để tính Q1 và Q2
-    quantiles = data.PERNP.iloc[train_rows].quantile([1 / 3, 2 / 3])
-    q1 = quantiles.iloc[0]
-    q2 = quantiles.iloc[1]
+    # 4. Tính hai ngưỡng thu nhập từ tập train
+    q1 = data["PERNP"].iloc[train_rows].quantile(1 / 3)
+    q2 = data["PERNP"].iloc[train_rows].quantile(2 / 3)
 
-    # 4. Phân chia thu nhập thành ba lớp
+    # 5. Tạo ba lớp thu nhập
     labels = pd.Series(
         np.select(
             [
-                data.PERNP <= q1,
-                data.PERNP <= q2,
+                data["PERNP"] <= q1,
+                data["PERNP"] <= q2,
             ],
             [0, 1],
             default=2,
@@ -182,25 +182,23 @@ def prepare_transformed_data(df, dictionary_path, test_size=0.3, random_state=42
         name="INCOME_CLASS",
     )
 
-    # 5. Tạo phiên bản A: giữ các mã chi tiết
+    # 6. Tạo phiên bản A: giữ mã chi tiết
     detailed = data[BASE_FEATURES].astype("int64").copy()
 
-    # Số giờ làm việc ước tính trong năm
-    # WKHP == 99 là top-code, tương ứng 99 giờ hoặc nhiều hơn
-    detailed["ANNUAL_HOURS"] = detailed.WKHP * detailed.WKWN
+    # Ước tính tổng số giờ làm việc trong năm
+    # WKHP = 99 biểu thị 99 giờ hoặc nhiều hơn mỗi tuần
+    detailed["ANNUAL_HOURS"] = detailed["WKHP"] * detailed["WKWN"]
 
-    # 6. Tạo phiên bản B: thay các mã chi tiết bằng mã nhóm
+    # 7. Tạo phiên bản B: thay mã chi tiết bằng mã nhóm
     grouped = detailed.copy()
 
     for column, table in mappings.items():
-        values = data[column].map(
-            table.set_index("raw_code")["group_code"]
-        )
+        group_codes = table.set_index("raw_code")["group_code"]
 
         grouped = grouped.rename(columns={column: f"{column}_GROUP"})
-        grouped[f"{column}_GROUP"] = values.astype("int64")
+        grouped[f"{column}_GROUP"] = data[column].map(group_codes).astype("int64")
 
-    # 7. Trả về dữ liệu và thông tin cần thiết
+    # 8. Trả về dữ liệu và thông tin cần thiết
     return {
         "variants": {
             "A_detailed": detailed,
