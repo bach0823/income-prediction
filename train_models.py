@@ -17,9 +17,8 @@ from sklearn.metrics import (
 from sklearn.model_selection import GridSearchCV, StratifiedKFold
 from sklearn.tree import DecisionTreeClassifier
 
-PROJECT_DIR = Path(__file__).resolve().parent
-DATA_DIR = PROJECT_DIR / "data/processed/texas_2024"
-OUTPUT_DIR = PROJECT_DIR / "data/results/cart_randomforest"
+DATA_DIR = Path("data/processed/texas_2024")
+OUTPUT_DIR = Path("data/results/cart_randomforest")
 
 VARIANTS = ("A_detailed", "B_grouped")
 LABELS = [0, 1, 2]
@@ -38,8 +37,11 @@ def load_data():
             .reset_index(drop=True)
         )
 
-        for variant in VARIANTS:
-            data["X"].setdefault(variant, {})[split] = (
+    for variant in VARIANTS:
+        data["X"][variant] = {}
+
+        for split in ("train", "test"):
+            data["X"][variant][split] = (
                 pd.read_csv(DATA_DIR / f"X_{variant}_{split}.csv")
                 .reset_index(drop=True)
             )
@@ -186,7 +188,7 @@ def run_experiments():
     print("\nSo sánh các mô hình:")
     print(comparison.to_string(index=False))
     print(f"\nMô hình được ưu tiên theo CV: {best['variant']} / {best['model']}")
-    print(f"Đã lưu kết quả tại: {OUTPUT_DIR.resolve()}")
+    print(f"Đã lưu kết quả tại: {OUTPUT_DIR}")
 
     return comparison
 
