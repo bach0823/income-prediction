@@ -4,20 +4,14 @@ Chuẩn bị dữ liệu ACS PUMS 2024 cho bài toán dự đoán thu nhập ng�
 Các bước:
 1. Nạp dữ liệu Texas từ ACS PUMS.
 2. Giữ lại 14 thuộc tính nghiên cứu.
-3. Lọc nhóm người trưởng thành có giờ làm và thu nhập lao động dương,
-   đồng thời loại lao động gia đình không hưởng lương.
+3. Lọc nhóm đối tượng nghiên cứu.
 4. Xử lý giá trị khuyết thiếu ở ENG và FOD1P.
 5. In thống kê mô tả cơ bản.
-6. Chuyển dữ liệu sang data_transformation.py để tạo nhãn thu nhập.
+6. Tạo nhãn thu nhập và lưu dữ liệu đã biến đổi.
 """
-
-import sys
 
 from folktables import ACSDataSource
 
-
-# Đường dẫn tương đối đến thư mục chứa dữ liệu ACS PUMS.
-DATA_PATH = "data/pums"
 
 # 14 thuộc tính được sử dụng trong nghiên cứu.
 STUDY_FEATURES = [
@@ -38,107 +32,58 @@ STUDY_FEATURES = [
 ]
 
 
-def load_raw_dataset(survey_year="2024"):
-    """Nạp dữ liệu ACS PUMS của Texas."""
-    data_source = ACSDataSource(
-        survey_year=survey_year,
-        horizon="1-Year",
-        survey="person",
-        root_dir=DATA_PATH,
-    )
+# 1. Nạp dữ liệu ACS PUMS 2024 của Texas
+data_source = ACSDataSource(
+    survey_year="2024",
+    horizon="1-Year",
+    survey="person",
+    root_dir="data/pums",
+)
 
-    df = data_source.get_data(states=["TX"], download=False)
-    print(f"Đã nạp dữ liệu: {df.shape[0]:,} dòng, {df.shape[1]} cột.")
-
-    return df
+df = data_source.get_data(states=["TX"], download=False)
+print(f"Đã nạp dữ liệu: {df.shape[0]:,} dòng, {df.shape[1]} cột.")
 
 
-def select_study_features(df):
-    """Chỉ giữ lại các thuộc tính được sử dụng trong nghiên cứu."""
-    df = df[STUDY_FEATURES].copy()
-    print(f"Kích thước sau khi chọn thuộc tính: {df.shape}")
-
-    return df
+# 2. Chọn 14 thuộc tính nghiên cứu
+df = df[STUDY_FEATURES].copy()
+print(f"Kích thước sau khi chọn thuộc tính: {df.shape}")
 
 
-def apply_data_homogenization(df):
-    """
-    Chọn nhóm đối tượng nghiên cứu:
-    - AGEP >= 18: từ 18 tuổi trở lên.
-    - WKHP > 0: có giờ làm trong 12 tháng qua.
-    - PERNP > 0: có thu nhập lao động dương.
-    - COW != 8: không thuộc nhóm lao động gia đình không hưởng lương.
-    """
-    initial_rows = len(df)
+# 3. Lọc nhóm đối tượng nghiên cứu
+initial_rows = len(df)
 
-    condition = (
-        (df["AGEP"] >= 18)
-        & (df["WKHP"] > 0)
-        & (df["PERNP"] > 0)
-        & (df["COW"] != 8)
-    )
+df = df.loc[
+    (df["AGEP"] >= 18)
+    & (df["WKHP"] > 0)
+    & (df["PERNP"] > 0)
+    & (df["COW"] != 8)
+].copy().reset_index(drop=True)
 
-    df = df.loc[condition].copy().reset_index(drop=True)
-
-    print(f"Số dòng ban đầu: {initial_rows:,}")
-    print(f"Số dòng sau khi lọc: {len(df):,}")
-    print(f"Số dòng bị loại: {initial_rows - len(df):,}")
-
-    return df
+print(f"Số dòng sau khi lọc: {len(df):,}")
+print(f"Số dòng bị loại: {initial_rows - len(df):,}")
 
 
-def impute_missing_values(df):
-    """Thay giá trị khuyết thiếu của ENG và FOD1P bằng 0."""
-    df = df.copy()
+# 4. Xử lý giá trị khuyết thiếu
+df["ENG"] = df["ENG"].fillna(0)
+df["FOD1P"] = df["FOD1P"].fillna(0)
 
-    for col in ["ENG", "FOD1P"]:
-        df[col] = df[col].fillna(0)
-
-    print("\nĐã xử lý giá trị khuyết thiếu ở ENG và FOD1P.")
-
-    return df
+print("Đã xử lý giá trị khuyết thiếu ở ENG và FOD1P.")
 
 
-def show_basic_statistics(df):
-    """In thông tin và thống kê mô tả cơ bản."""
-    print("\nThông tin tập dữ liệu:")
-    df.info()
+# 5. Thống kê mô tả cơ bản
+print("\nThông tin tập dữ liệu:")
+df.info()
 
-    print("\nThống kê mô tả:")
-    print(df[["AGEP", "WKWN", "WKHP", "PERNP"]].describe())
+print("\nThống kê mô tả:")
+print(df[["AGEP", "WKWN", "WKHP", "PERNP"]].describe())
 
 
-if __name__ == "__main__":
-    survey_year = sys.argv[1] if len(sys.argv) > 1 else "2024"
+# 6. Tạo nhãn thu nhập và lưu dữ liệu đã biến đổi
+from data_transformation import prepare_transformed_data, export_transformed_data
 
-    # 1. Nạp dữ liệu
-    df = load_raw_dataset(survey_year)
+prepared_data = prepare_transformed_data(
+    df,
+    "data/pums/data_dict_2024/PUMS_Data_Dictionary_2024.csv",
+)
 
-    # 2. Chọn thuộc tính nghiên cứu
-    df = select_study_features(df)
-
-    # 3. Lọc nhóm đối tượng nghiên cứu
-    df = apply_data_homogenization(df)
-
-    # 4. Xử lý giá trị khuyết thiếu
-    df = impute_missing_values(df)
-
-    # 5. Thống kê cơ bản
-    show_basic_statistics(df)
-
-    # 6. Tạo nhãn thu nhập và lưu dữ liệu đã biến đổi
-    if survey_year == "2024":
-        from data_transformation import (
-            prepare_transformed_data,
-            export_transformed_data,
-        )
-
-        export_transformed_data(
-            prepare_transformed_data(
-                df,
-                "data/pums/data_dict_2024/PUMS_Data_Dictionary_2024.csv",
-            ),
-            "data/processed/texas_2024",
-        )
-    else:
-        print("Chỉ hỗ trợ biến đổi dữ liệu năm 2024.")
+export_transformed_data(prepared_data, "data/processed/texas_2024")
