@@ -1,0 +1,459 @@
+BƯỚC 1: CHỌN NHÓM LỚN (286 -> 120 biến)
+
+ACS PUMS 2024 (Texas), PERSON RECORD gồm 286 cột chia thành 5 nhóm lớn:
+
+  Nhóm | Tên nhóm                           | Số biến
+  1    | Basic Variables                    | 9
+  2    | Person Variables                   | 67
+  3    | Recoded Person Variables           | 53
+  4    | Allocation Flags                   | 77
+  5    | Replicate Weights (PWGTP1-80)      | 80
+  Tổng |                                    | 286
+
+Thay đổi so với 2018: ST -> STATE; RELP -> RELSHIPP; JWTR -> JWTRNS;
+WKW -> WKWN (nay là số tuần 1-52); thêm HIMRKS; gộp MLPH+MLPJ -> MLPHJ,
+MLPI+MLPK -> MLPIK; VPS -> VPSP; thêm cờ FHIMRKSP.
+
+Giữ nhóm 2 và nhóm 3 (67 + 53 = 120 biến).
+Loại nhóm 1, 4, 5 (166 biến) vì không mô tả đặc điểm của người:
+  - Nhóm 1: mã định danh, địa lý, hệ số quy đổi, trọng số mẫu.
+  - Nhóm 4: cờ cho biết giá trị có bị ước lượng/điền bù hay không.
+  - Nhóm 5: trọng số lặp, chỉ dùng để tính sai số chuẩn.
+
+Sau bước 1: 120 biến.
+
+----------------------------------------------------------------------
+
+BƯỚC 2: GỘP NHÓM 2 VÀ 3, PHÂN LẠI THEO CHỦ ĐỀ, LOẠI NHÓM NHỎ (120 -> 66 biến)
+
+2a. Gộp 120 biến thành 12 nhóm nhỏ theo chủ đề
+(cách phân nhóm theo chủ đề do nhóm tự thực hiện, không phải phân loại của Census)
+
+  Nhóm nhỏ                            | Số biến | Thuộc tính
+  Thu nhập                            | 11 | WAGP, SEMP, INTP, RETP, SSP, SSIP, PAP, OIP, PERNP, PINCP, POVPIP
+  Quân ngũ                            | 9  | MIL, MLPA, MLPB, MLPCD, MLPE, MLPFG, MLPHJ, MLPIK, VPSP
+  Di chuyển                           | 3  | MIG, MIGPUMA, MIGSP
+  Gia đình & con cái                  | 11 | FER, GCL, GCM, GCR, ESP, PAOC, NOP, OC, RC, SFN, SFR
+  Bảo hiểm y tế                       | 11 | HIMRKS, HINS1-HINS7, HICOV, PRIVCOV, PUBCOV
+  Khuyết tật                          | 9  | DDRS, DEAR, DEYE, DOUT, DPHY, DRAT, DRATX, DREM, DIS
+  Nhân khẩu & hôn nhân                | 10 | AGEP, SEX, RELSHIPP, MAR, MARHD, MARHM, MARHT, MARHW, MARHYP, MSP
+  Ngôn ngữ                            | 3  | ENG, LANX, LANP
+  Nơi sinh, quốc tịch & nhập cư       | 8  | CIT, CITWP, YOEP, NATIVITY, POBP, WAOB, DECADE, QTRBIR
+  Giáo dục & ngành học                | 7  | SCH, SCHG, SCHL, FOD1P, FOD2P, SCIENGP, SCIENGRLP
+  Việc làm, nghề, ngành & đi lại      | 23 | COW, WKL, WKWN, WRK, WKHP, NWAB, NWAV, NWLA, NWLK, NWRE, JWTRNS,
+                                          |    | JWMNP, JWRIP, ESR, OCCP, INDP, SOCP, NAICSP, JWAP, JWDP, DRIVESP,
+                                          |    | POWPUMA, POWSP
+  Sắc tộc & nguồn gốc                 | 15 | HISP, RAC1P, RAC2P, RAC3P, RACAIAN, RACASN, RACBLK, RACNH, RACNUM,
+                                          |    | RACPI, RACSOR, RACWHT, ANC, ANC1P, ANC2P
+  Tổng                                | 120
+
+2b. Loại 6 nhóm nhỏ (54 biến)
+
+  Thu nhập (11): là biến mục tiêu, thành phần cấu thành mục tiêu, hoặc được
+    tính từ thu nhập; giữ lại sẽ khiến mô hình "nhìn thấy đáp án". Riêng PERNP
+    được giữ tách riêng chỉ để tạo nhãn lớp thu nhập, không đưa vào ma trận
+    đặc trưng X.
+  Quân ngũ (9): chỉ áp dụng cho cựu chiến binh nên hầu hết các biến gần như
+    toàn giá trị thiếu (trên mẫu 2018, 8/9 biến thiếu từ 93% trở lên); đồng
+    thời ít liên quan đến mức thu nhập của đa số người lao động.
+  Di chuyển (3): thông tin về nơi ở trước đây, ít liên quan thu nhập lao động.
+  Gia đình & con cái (11): phần lớn chỉ áp dụng cho trẻ em hoặc người có quan
+    hệ gia đình đặc thù, nên rất nhiều giá trị thiếu (trên mẫu 2018, ESP, NOP,
+    OC, RC thiếu 100%; GCM, GCR, SFN, SFR thiếu từ 97% trở lên).
+  Bảo hiểm y tế (11): bảo hiểm phản ánh kết quả của việc làm và thu nhập
+    hơn là yếu tố quyết định thu nhập.
+  Khuyết tật (9): khuyết tật chủ yếu ảnh hưởng thu nhập gián tiếp, qua nghề
+    nghiệp, số giờ làm, số tuần làm, hoặc việc có đi làm hay không; các yếu tố
+    này đã được thể hiện qua OCCP, INDP, WKHP, WKWN, và việc có đi làm đã được
+    kiểm soát bằng bộ lọc mẫu. Nhóm bị loại để ưu tiên các biến có ảnh hưởng
+    trực tiếp hơn (xem phần Lưu ý và hạn chế).
+
+2c. Còn lại 6 nhóm nhỏ, 66 biến:
+  Nhân khẩu & hôn nhân (10), Ngôn ngữ (3), Nơi sinh/quốc tịch/nhập cư (8),
+  Giáo dục & ngành học (7), Việc làm/nghề/ngành/đi lại (23),
+  Sắc tộc & nguồn gốc (15).
+
+Sau bước 2: 66 biến.
+
+----------------------------------------------------------------------
+
+BƯỚC 3: LOẠI BIẾN TRONG CÁC NHÓM NHỎ CÒN LẠI (66 -> 13 biến)
+
+Bước 3 xét từng biến trong 6 nhóm nhỏ còn lại. Mỗi nhóm nhỏ chỉ giữ những
+biến đại diện cho các yếu tố quyết định thu nhập lao động: học vấn, tuổi
+(đại diện cho kinh nghiệm), cường độ làm việc, công việc và đặc điểm nhân
+khẩu. Các biến còn lại bị loại vì chỉ là chi tiết của biến đã giữ, trùng
+thông tin với biến đã giữ, không phù hợp với mẫu đã lọc WKHP > 0, hoặc nằm
+ngoài các yếu tố trên. Lý do cụ thể được ghi ngay tại từng nhóm.
+
+3.1. Nhân khẩu & hôn nhân (10 -> 3)
+  Giữ: AGEP, SEX, MAR
+  Loại:
+    MARHD, MARHM, MARHT, MARHW, MARHYP: là các biến chi tiết của MAR (năm,
+      tháng kết hôn, ly hôn, góa bụa...). MAR đã bao quát tình trạng hôn nhân
+      nên giữ MAR và loại các biến chi tiết.
+    MSP: phản ánh cùng khía cạnh hôn nhân với MAR (có vợ/chồng ở cùng hay
+      không), trùng thông tin với MAR nên chỉ giữ một biến.
+    RELSHIPP: quan hệ với chủ hộ, mô tả vai trò trong hộ gia đình chứ không
+      phải đặc điểm cá nhân quyết định thu nhập.
+
+3.2. Ngôn ngữ (3 -> 1)
+  Giữ: ENG
+  Loại:
+    LANX: chỉ cho biết có nói ngôn ngữ khác tại nhà hay không, không phản ánh
+      năng lực làm việc nên không bổ sung đáng kể cho ENG.
+    LANP: là chi tiết ngôn ngữ nói tại nhà, cũng không bổ sung đáng kể cho
+      ENG. ENG (mức thông thạo tiếng Anh) có ý nghĩa hơn với thu nhập lao động.
+
+3.3. Nơi sinh, quốc tịch & nhập cư (8 -> 1)
+  Giữ: NATIVITY
+  Loại:
+    CIT, CITWP, YOEP: phản ánh cùng khía cạnh nguồn gốc/nhập cư với NATIVITY
+      (quốc tịch, năm nhập tịch, năm nhập cư); chỉ giữ một biến để tránh
+      trùng lặp.
+    POBP, WAOB, DECADE: là chi tiết của nơi sinh và thời kỳ nhập cư, trong khi
+      NATIVITY bao quát hơn.
+    QTRBIR: quý sinh, không thuộc nhóm yếu tố quyết định thu nhập.
+
+3.4. Giáo dục & ngành học (7 -> 2)
+  Giữ: SCHL, FOD1P
+  Loại:
+    SCH: cho biết có đang đi học hay không; trình độ học vấn đã được thể hiện
+      đầy đủ hơn qua SCHL nên loại SCH.
+    SCHG: lớp đang học, chỉ áp dụng cho người đang đi học, trong mẫu đã lọc
+      là rất ít (trên mẫu 2018, thiếu 90%).
+    FOD2P, SCIENGP, SCIENGRLP: là chi tiết của FOD1P (ngành học thứ hai, nhóm
+      ngành khoa học kỹ thuật); FOD1P bao quát ngành học chính nên giữ FOD1P.
+
+3.5. Việc làm, nghề, ngành & đi lại (23 -> 5)
+  Giữ: COW, WKWN, WKHP, OCCP, INDP
+  Loại:
+    WKL, NWAB, NWAV, NWLA, NWLK, NWRE: chỉ áp dụng cho người không làm việc
+      hoặc tạm nghỉ (lần làm việc cuối, lý do vắng mặt, đang tìm việc...).
+      Mẫu đã lọc WKHP > 0 nên các biến này gần như không còn biến thiên (WKL
+      là hằng số trên mẫu 2018).
+    WRK: "có làm việc tuần trước hay không", trùng với bộ lọc WKHP > 0 nên
+      không còn phân biệt được người này với người khác.
+    ESR: là trạng thái việc làm tại thời điểm khảo sát và gồm cả người thất
+      nghiệp, ngoài lực lượng lao động. Mẫu đã lọc theo WKHP > 0 và PERNP > 0,
+      còn cường độ làm việc cả năm đã được thể hiện qua WKHP, WKWN, COW nên
+      loại ESR.
+      [Điền số liệu: tỷ lệ giá trị phổ biến nhất của ESR sau lọc = __%]
+    JWTRNS, JWMNP, JWRIP, JWAP, JWDP, DRIVESP, POWPUMA, POWSP: mô tả phương
+      tiện, thời gian, giờ giấc đi làm và nơi làm việc; đây là đặc điểm đi lại,
+      không thuộc nhóm yếu tố quyết định thu nhập nên loại.
+    SOCP, NAICSP: là bản mã hóa thay thế của OCCP và INDP (hai hệ thống mã
+      nghề, mã ngành); chỉ giữ OCCP và INDP để không dùng đồng thời hai hệ
+      thống mã cho cùng một thông tin.
+
+3.6. Sắc tộc & nguồn gốc (15 -> 1)
+  Giữ: RAC1P
+  Loại:
+    RAC2P, RAC3P, RACAIAN, RACASN, RACBLK, RACNH, RACNUM, RACPI, RACSOR, RACWHT:
+      là chi tiết hoặc tổ hợp của chủng tộc; RAC1P bao quát nhóm chủng tộc
+      chính nên giữ RAC1P.
+    ANC, ANC1P, ANC2P: nguồn gốc tổ tiên, nằm ngoài các yếu tố ưu tiên của mô
+      hình.
+    HISP: gốc Hispanic là một khía cạnh riêng, không trùng hoàn toàn với
+      RAC1P; loại để bộ biến gọn hơn, và ghi nhận là hạn chế (xem phần Lưu ý
+      và hạn chế).
+
+13 BIẾN CUỐI
+  AGEP, SEX, MAR, ENG, SCHL, FOD1P, COW, WKWN, WKHP, OCCP, INDP, RAC1P, NATIVITY
+
+Phủ 5 nhóm yếu tố:
+  Học vấn: SCHL, FOD1P
+  Kinh nghiệm/tuổi: AGEP
+  Cường độ làm việc: WKHP, WKWN
+  Công việc: COW, OCCP, INDP
+  Nhân khẩu: SEX, MAR, RAC1P, NATIVITY, ENG
+
+Tóm tắt: 286 -> 120 (loại 166 cột không phải đặc trưng của người)
+              -> 66 (loại 54 biến theo nhóm nhỏ)
+              -> 13 (loại 53 biến theo biến).
+
+----------------------------------------------------------------------
+
+LƯU Ý VÀ HẠN CHẾ
+
+1. WKWN năm 2024 là số tuần làm việc 1-52, dùng trực tiếp như biến định lượng.
+   RELSHIPP thay RELP, JWTRNS thay JWTR; các nhóm Quân ngũ, Bảo hiểm y tế bị
+   loại ở bước 2 nên các thay đổi tên MLPHJ, MLPIK, VPSP, HIMRKS không ảnh hưởng.
+2. Các số liệu kiểm tra tỷ lệ thiếu và tỷ lệ giá trị trùng (nhóm biến thiếu
+   >= 90%, đơn trị >= 99%) được tính trên mẫu ACS PUMS 2018 Texas (134,701
+   dòng sau lọc), dùng làm bằng chứng bổ trợ; tên một số biến khác với 2024.
+3. Bộ biến cuối không kiểm soát riêng khuyết tật (DIS) và gốc Hispanic (HISP).
+   Trong dữ liệu PUMS, nhiều người gốc Hispanic được xếp vào "White alone" ở
+   RAC1P, nên RAC1P không đại diện đầy đủ yếu tố này. Khuyết tật có thể ảnh
+   hưởng trực tiếp đến mức lương trong cùng một nghề; mô hình chỉ nắm bắt được
+   phần ảnh hưởng gián tiếp qua nghề nghiệp và cường độ làm việc.
+4. Phân nhóm nhỏ ở bước 2a theo chủ đề do nhóm tự thực hiện.
+5. Việc chọn 5 nhóm yếu tố (học vấn, tuổi, cường độ làm việc, công việc, nhân
+   khẩu) dựa trên khung phương trình tiền lương kiểu Mincer mở rộng. Mô hình
+   Mincer gốc chỉ có học vấn và kinh nghiệm; các nhóm còn lại là phần mở rộng
+   trong các nghiên cứu về tiền lương. AGEP là biến đại diện cho kinh nghiệm.
+6. Phần lớn lý do loại ở bước 3 là phán đoán dựa trên khung giải thích; chỉ các
+   biến chi tiết của một biến tổng hợp (MARH*, RAC*, SOCP/NAICSP...) mới có thể
+   kiểm chứng cơ học.
+
+show bảng dataset sau khi bước loại thuộc tính dư thừa
+
+
+xử lý nhiễu
+2.1.1.2. Loại bỏ nhiễu
+Nhiễu (Noise) là các sai số ngẫu nhiên hoặc sự biến dạng giá trị trong một thuộc tính đo lường, trong khi phần tử ngoại lai (Outliers) là các quan sát nằm lệch xa khỏi phân phối chung của dữ liệu. Để kiểm tra nhiễu một cách hệ thống trên 14 thuộc tính đã chọn, nhóm phân chia các thuộc tính thành 2 nhóm dựa trên bản chất thang đo:
+•	Nhóm 1 – Các thuộc tính phân loại (Nominal & Ordinal - 10 thuộc tính):
+o	Biến định danh (Nominal): SEX (Giới tính), MAR (Tình trạng hôn nhân), COW (Phân loại lao động), RAC1P (Chủng tộc), NATIVITY (Nguồn gốc xuất thân), FOD1P (Ngành học ĐH), OCCP (Nghề nghiệp), INDP (Ngành công nghiệp).
+o	Biến thứ bậc (Ordinal): ENG (Trình độ tiếng Anh: từ 1 - Rất tốt đến 4 - Không biết nói), SCHL (Trình độ học vấn: từ 01 - Chưa đi học đến 24 - Tiến sĩ).
+•	Nhóm 2 – Các thuộc tính số học / liên tục (Numerical / Continuous - 4 thuộc tính):
+o	Bao gồm: AGEP (Độ tuổi), WKWN (Số tuần làm việc trong năm), WKHP (Số giờ làm việc mỗi tuần), và biến mục tiêu PERNP (Tổng thu nhập lao động cá nhân).
+________________________________________
+a) Tiến hành kiểm tra nhiễu trên từng nhóm thuộc tính:
+1. Kiểm tra trên Nhóm 1 (Các biến Nominal và Ordinal):
+Đối với các biến mã danh mục và thứ bậc, nhiễu xảy ra khi xuất hiện các "mã lạ" nằm ngoài danh mục quy định của từ điển dữ liệu (Out-of-domain codes). Nhóm tiến hành đối chiếu tập giá trị thực tế của cả 10 thuộc tính với ACS PUMS Data Dictionary 2024:
+Thuộc tính	Bản chất thang đo	Miền mã hợp lệ (PUMS 2024)	Miền giá trị thực tế trong Dataset	Số bản ghi sai miền (Nhiễu)
+SEX	Nominal	{1, 2}	1 .. 2 (2 mã)	0
+MAR	Nominal	{1, 2, 3, 4, 5}	1 .. 5 (5 mã)	0
+NATIVITY	Nominal	{1, 2}	1 .. 2 (2 mã)	0
+RAC1P	Nominal	{1 .. 9}	1 .. 9 (9 mã)	0
+COW	Nominal	{1 .. 9}	1 .. 8 (8 mã)	0
+ENG	Ordinal	{1, 2, 3, 4} (hoặc NaN)	1 .. 4 (4 mã + NaN)	0
+SCHL	Ordinal	{01 .. 24}	1 .. 24 (24 mã)	0
+FOD1P	Nominal	1100 .. 6403 (hoặc NaN)	1100 .. 6403 (173 mã + NaN)	0
+OCCP	Nominal	0010 .. 9920	10 .. 9830 (529 mã)	0
+INDP	Nominal	0170 .. 9920	170 .. 9870 (271 mã)	0
+2. Kiểm tra trên Nhóm 2 (Các biến Số học / Liên tục):
+Đối với 4 biến định lượng (AGEP, WKWN, WKHP, PERNP), nhóm kiểm tra phân vị từ Min (0%) đến Max (100%) để phát hiện các giá trị vượt giới hạn vật lý (ví dụ: số tuần 
+>52>52
+, số giờ/tuần 
+>168>168
+) cũng như các điểm ngoại lai (Outliers) ở hai đầu phân phối:
+(Chèn ảnh chụp màn hình kết quả chạy hàm check_noise_by_variable_groups trên Terminal vào đây)
+•	Kiểm tra giới hạn vật lý:
+o	AGEP nằm trong khoảng [18, 95] tuổi (0 bản ghi 
+<18<18
+hoặc 
+>115>115
+).
+o	WKWN nằm đúng trong khoảng [1, 52] tuần/năm (0 bản ghi 
+≤0≤0
+hoặc 
+>52>52
+).
+o	WKHP nằm trong khoảng [1, 99] giờ/tuần (0 bản ghi 
+≤0≤0
+hoặc 
+>168>168
+).
+•	Kiểm tra các phần tử biên / ngoại lai (Outliers):
+o	Tại WKHP: Có 603 bản ghi (0.41%) làm việc 
+>84>84
+giờ/tuần, trong đó 304 bản ghi (0.21%) mang giá trị WKHP == 99.
+o	Tại AGEP: Có 217 bản ghi (0.15%) là người cao tuổi từ 85 đến 95 tuổi.
+o	Tại PERNP: Phân phối lệch phải mạnh với trung vị khoảng $48,000/năm, nhưng biên dưới có các giá trị nhỏ (<= $100/năm) và biên trên kéo dài tới hơn $1,000,000/năm.
+________________________________________
+b) Đánh giá và Quyết định xử lý:
+Qua kết quả kiểm tra trên cả 2 nhóm thuộc tính, nhóm đưa ra đánh giá sau:
+1.	Không tồn tại nhiễu do lỗi nhập liệu hay sai miền giá trị: Toàn bộ 10 biến phân loại (Nominal/Ordinal) và 4 biến số học (Numerical) đều tuân thủ tuyệt đối miền giá trị của Cục Thống kê Dân số Hoa Kỳ (U.S. Census Bureau).
+2.	Bản chất của các điểm ngoại lai (Outliers) trên nhóm biến số học: Các giá trị cực đại ở WKHP = 99, AGEP = 95 hay PERNP hàng triệu USD thực chất là kết quả của quy trình cắt ngọn (Top-coding / Bottom-coding) chuẩn hóa của ACS PUMS nhằm bảo mật danh tính và gom nhóm các quan sát ở đuôi phân phối. Tương tự, các giá trị biên dưới của PERNP phản ánh thu nhập ròng của nhóm lao động tự doanh sau khi trừ chi phí hoặc làm việc bán thời gian ngắn hạn.
+3.	Phương pháp xử lý: Theo lý thuyết Khai phá dữ liệu, thay vì xóa bỏ các phần tử biên (gây mất mát thông tin của các nhóm lao động đặc thù), phương pháp hiệu quả để triệt tiêu ảnh hưởng của nhiễu và ngoại lai trên biến liên tục là Làm trơn bằng kỹ thuật Chia giỏ (Smoothing by Binning / Discretization). Tại bước 2.1.3. Biến đổi dữ liệu, cả 4 biến số học (AGEP, WKWN, WKHP, PERNP) sẽ được rời rạc hóa thành các khoảng giá trị (bins) và tam phân vị (Tertiles), giúp hấp thụ hoàn toàn các điểm cực trị ở hai đầu phân phối.
+⇒⇒
+Quyết định: Giữ nguyên 100% số bản ghi hiện tại (Loại bỏ 0 dòng) và chuyển các biến số học sang xử lý làm trơn bằng kỹ thuật Chia giỏ ở bước Biến đổi dữ liệu.
+
+
+bước xử lý không nhất quán
+2.1.1.2. Loại bỏ nhiễu
+Để đảm bảo chất lượng dữ liệu trước khi đưa vào huấn luyện mô hình phân lớp, nhóm thực hiện kiểm tra các bản ghi có dấu hiệu nhiễu, ngoại lai (outliers) hoặc mâu thuẫn ngữ nghĩa giữa các thuộc tính.
+Bước 1: Kiểm tra và phát hiện các bản ghi mâu thuẫn / nhiễu tiềm năng
+Nhóm tiến hành chạy các truy vấn thống kê để kiểm tra 4 trường hợp bất thường trong tập dữ liệu đã lọc sơ bộ (df_final):
+1.	Kiểm tra mâu thuẫn ở nhóm COW = 8:
+Python
+print(df_final.loc[df_final["COW"] == 8, "PERNP"].describe().round(2))
+(Chèn ảnh chụp kết quả chạy lệnh trên)
+o	Nhận xét: Theo từ điển dữ liệu ACS PUMS, COW = 8 là nhóm "Làm việc không hưởng lương trong cơ sở kinh doanh/trang trại gia đình" (Unpaid family worker). Tuy nhiên, kết quả thống kê cho thấy vẫn tồn tại các bản ghi thuộc nhóm này có PERNP > 0 (thậm chí phân vị cao lên tới hàng chục nghìn USD). Điều này gây mâu thuẫn về mặt bản chất công việc.
+2.	Kiểm tra nhóm thu nhập cực tiểu (PERNP <= 100):
+Python
+print(df_final.loc[df_final["PERNP"] <= 100, ["AGEP", "WKWN", "WKHP", "PERNP"]].describe().round(2))
+(Chèn ảnh chụp kết quả chạy lệnh trên)
+o	Nhận xét: Tồn tại các cá nhân đi làm nhiều tuần trong năm và số giờ làm việc mỗi tuần cao nhưng tổng thu nhập cả năm chỉ từ $1 đến $100. Đây là các giá trị nhiễu (do khai báo sai hoặc chỉ mang tính chất tượng trưng), không phản ánh đúng thu nhập của người lao động.
+3.	Kiểm tra điều kiện xuất hiện giá trị của ngành học Đại học (FOD1P) theo trình độ học vấn (SCHL):
+Python
+print(pd.crosstab(df_final["SCHL"] >= 21, df_final["FOD1P"].notna()))
+(Chèn ảnh chụp kết quả bảng Crosstab)
+o	Nhận xét: Bảng chéo (Crosstab) chứng minh 100% các bản ghi có SCHL < 21 (chưa tốt nghiệp Cử nhân) đều nhận giá trị False (NaN) ở cột FOD1P, và 100% bản ghi có SCHL >= 21 đều có giá trị FOD1P hợp lệ. Như vậy, việc FOD1P bị khuyết không phải là nhiễu ngẫu nhiên mà là dữ liệu khuyết có cấu trúc (Structural Missing).
+4.	Kiểm tra ngoại lai ở số giờ làm việc mỗi tuần (WKHP > 84):
+Python
+print(df_final.loc[df_final["WKHP"] > 84, ["AGEP", "WKHP", "PERNP"]].describe().round(2))
+(Chèn ảnh chụp kết quả chạy lệnh trên)
+o	Nhận xét: Một số bản ghi có số giờ làm việc lớn hơn 84 giờ/tuần (tương đương làm việc trên 12 giờ/ngày liên tục cả 7 ngày trong tuần, thậm chí lên tới 99 giờ/tuần). Đây là các điểm ngoại lai cực đoan (extreme outliers).
+________________________________________
+Bước 2: Đưa ra quyết định xử lý
+Từ các bằng chứng thống kê ở Bước 1, nhóm thống nhất quyết định:
+•	Loại bỏ khỏi tập dữ liệu: Các bản ghi vi phạm một trong ba điều kiện nhiễu: COW == 8 (mâu thuẫn ngữ nghĩa), PERNP <= 100 (nhiễu thu nhập cực tiểu), và WKHP > 84 (ngoại lai thời gian làm việc phi thực tế). (Lưu ý: Nếu nhóm bạn chỉ muốn xóa COW == 8 và PERNP <= 100 thì bỏ điều kiện WKHP > 84 đi).
+•	Giữ lại và chuyển sang bước Xử lý dữ liệu bị thiếu: Đối với thuộc tính FOD1P bị khuyết ở nhóm SCHL < 21, nhóm không xóa bản ghi mà sẽ gán một mã danh mục riêng (ví dụ: 0 - "Không có chuyên ngành ĐH") ở mục 2.1.1.3. Xử lý dữ liệu bị thiếu.
+________________________________________
+Bước 3: Thực thi loại bỏ nhiễu hàng loạt và Kết quả
+Nhóm áp dụng bộ lọc вектор (vectorized boolean mask) qua hàm apply_noise_removal() để loại bỏ đồng thời tất cả các bản ghi nhiễu:
+(Chèn ảnh chụp màn hình đoạn code hàm apply_noise_removal và log kết quả trên Terminal)
+Sau khi chạy lọc hàng loạt, toàn bộ các bản ghi nhiễu và mâu thuẫn đã được làm sạch hoàn toàn, tập dữ liệu còn lại ... bản ghi nhất quán và đáng tin cậy.
+
+# FOD1P có giá trị khi nào print(pd.crosstab(df_filtered["SCHL"] >= 21, df_filtered["FOD1P"].notna())) # nhóm COW = 8 print(df_filtered.loc[df_filtered["COW"] == 8, "PERNP"].describe())
+loại cow = 8 và pernp > 0
+
+
+
+
+
+2. Phân tích dữ liệu
+PHẦN 1: CODE PYTHON (CHỈ SHOW KIỂM TRA & IN KẾT LUẬN GIỮ NGUYÊN)
+Trong file Python của bạn, hàm kiểm tra ở bước 2.1.1.2 sẽ chỉ làm nhiệm vụ Show bằng chứng thống kê và chốt lại là giữ nguyên 100% số dòng (146,745 dòng):
+Python
+# ---------------------------------------------------------
+# 5. Bước 2.1.1.2: Khảo Sát Nhiễu & Ngoại Lai (Không cắt bỏ)
+# ---------------------------------------------------------
+def check_noise_and_outliers(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Khảo sát các giá trị biên (extreme values) ở các thuộc tính định lượng:
+    WKHP > 84, tỷ lệ PERNP / (WKWN * WKHP), PERNP <= 100, và AGEP >= 85.
+    Kết luận: Các giá trị biên đều phản ánh thực tế kinh tế - xã hội và quy ước
+    Top-coding của ACS PUMS -> Quyết định KHÔNG loại bỏ bản ghi nào, mà sẽ làm trơn
+    thông qua kỹ thuật Rời rạc hóa (Binning) ở bước Biến đổi dữ liệu.
+    """
+    print("\n" + "=" * 85)
+    print("4. KHẢO SÁT NHIỄU & GIÁ TRỊ BIÊN (NOISE & EXTREME VALUES CHECK)")
+    print("=" * 85)
+
+    wkw_col = 'WKWN' if 'WKWN' in df.columns else 'WKW'
+    hourly_rate = df["PERNP"] / (df[wkw_col] * df["WKHP"])
+
+    # 1. Kiểm tra WKHP > 84 và mã trần Top-code WKHP == 99
+    print("\n--- [1] Phân phối nhóm số giờ làm việc cao (WKHP > 84 & Top-code 99) ---")
+    print(f"Số dòng WKHP > 84 : {(df['WKHP'] > 84).sum():,} ({(df['WKHP'] > 84).mean()*100:.2f}%)")
+    print(f"Số dòng WKHP == 99: {(df['WKHP'] == 99).sum():,} ({(df['WKHP'] == 99).mean()*100:.2f}%)")
+    print(df.loc[df["WKHP"] > 84, "WKHP"].value_counts().sort_index())
+
+    # 2. Kiểm tra tỷ lệ PERNP / (WKWN * WKHP) và PERNP <= 100
+    print("\n--- [2] Phân vị thù lao ước tính theo giờ: PERNP / (WKWN * WKHP) ---")
+    quantiles = [0.0, 0.05, 0.25, 0.50, 0.75, 0.95]
+    summary_hourly = pd.DataFrame({
+        "Toàn bộ dữ liệu": hourly_rate.quantile(quantiles).round(2),
+        "Nhóm WKHP > 84": hourly_rate[df["WKHP"] > 84].quantile(quantiles).round(2)
+    })
+    print(summary_hourly.to_string())
+    print(f"Số dòng PERNP <= $100: {(df['PERNP'] <= 100).sum():,} ({(df['PERNP'] <= 100).mean()*100:.2f}%)")
+
+    # 3. Kiểm tra nhóm người cao tuổi AGEP >= 85
+    print("\n--- [3] Khảo sát nhóm lao động cao tuổi (AGEP >= 85) ---")
+    elderly = df.loc[df["AGEP"] >= 85]
+    print(f"Số dòng AGEP >= 85: {len(elderly):,} ({len(elderly)/len(df)*100:.2f}%)")
+    print(elderly[["AGEP", wkw_col, "WKHP", "PERNP"]].describe().round(2).to_string())
+    print("\nTop 10 nghề nghiệp (OCCP) của nhóm AGEP >= 85:")
+    print(elderly["OCCP"].value_counts().head(10))
+
+    # Kết luận bước xử lý nhiễu
+    print("\n" + "-" * 85)
+    print("[✓] KẾT LUẬN BƯỚC LOẠI BỎ NHIỄU:")
+    print("    - Dữ liệu đã qua kiểm duyệt chuẩn của US Census Bureau (ACS PUMS).")
+    print("    - Các giá trị biên (AGEP >= 85, WKHP > 84, PERNP thấp) đều có cơ sở thực tế")
+    print("      (lao động cao tuổi bán thời gian, đặc thù nghề nghiệp ca dài, thu nhập tự doanh ròng).")
+    print("    - Các giá trị cực trị sẽ được làm trơn tự nhiên bằng kỹ thuật Chia giỏ (Binning)")
+    print("      ở bước Biến đổi dữ liệu.")
+    print(f"    => QUYẾT ĐỊNH: Giữ nguyên toàn bộ {len(df):,} bản ghi (Loại bỏ 0 dòng).")
+    print("-" * 85)
+
+    return df
+________________________________________
+PHẦN 2: CÁCH TRÌNH BÀY TRONG BÁO CÁO (MỤC 2.1.1.2. LOẠI BỎ NHIỄU)
+Dưới đây là phần nội dung chuẩn để bạn đưa vào mục 2.1.1.2. Loại bỏ nhiễu trong chương 2 (Quy trình khai phá dữ liệu). Bạn có thể copy trực tiếp bảng biểu và lời văn này vào Word:
+________________________________________
+2.1.1.2. Loại bỏ nhiễu
+Khác với các tập dữ liệu thô thu thập tự do thường chứa các lỗi nhập liệu ngẫu nhiên, bộ dữ liệu vi mô ACS PUMS 2024 đã được Cục Thống kê Dân số Hoa Kỳ (U.S. Census Bureau) kiểm duyệt và áp dụng kỹ thuật giới hạn biên (Top-coding / Bottom-coding). Tuy nhiên, để đảm bảo tính khách quan, nhóm vẫn tiến hành khảo sát sâu các giá trị biên (extreme values) trên các thuộc tính định lượng (WKHP, WKWN, AGEP, PERNP) nhằm xác định xem đó là nhiễu sai lệch hay là đặc tính thực tế của thị trường lao động.
+a) Khảo sát các nhóm giá trị biên trong tập dữ liệu (146,745 bản ghi):
+•	Khảo sát 1: Nhóm làm việc với số giờ cực cao (WKHP > 84 giờ/tuần và mức trần WKHP == 99)
+o	Kết quả thống kê: Có 603 bản ghi (chiếm 0.41%) có số giờ làm việc trên 84 giờ/tuần; trong đó mức trần WKHP == 99 chiếm 304 bản ghi (0.21% toàn tập dữ liệu), tiếp theo là mốc 90 giờ (119 người) và 96 giờ (38 người).
+o	Phân tích: Theo tài liệu PUMS Data Dictionary 2024, giá trị 99 là mã quy ước hợp lệ đại diện cho nhóm làm việc "99 giờ hoặc nhiều hơn/tuần". Các mốc 90 giờ (
+15h×6 ngaˋy15h×6 ngaˋy
+) hoặc 96 giờ (
+16h×6 ngaˋy16h×6 ngaˋy
+) phản ánh đúng nhóm lao động làm việc theo ca kíp đặc thù hoặc trực tại chỗ (như kỹ sư giàn khoan dầu khí tại Texas, y bác sĩ trực viện, lái xe đường dài, quản lý trang trại).
+•	Khảo sát 2: Tỷ lệ thù lao ước tính theo giờ 
+(PERNPWKWN×WKHP)(WKWN×WKHPPERNP)
+và nhóm thu nhập thấp
+o	Kết quả thống kê:
+Phân vị	Toàn bộ dữ liệu (
+N=146,745N=146,745
+)	Nhóm WKHP > 84 (
+N=603N=603
+)
+Min	$0.00 (làm tròn từ < $0.01)	$0.00
+5%	$5.77 / giờ	$2.27 / giờ
+25%	$14.42 / giờ	$7.92 / giờ
+50% (Trung vị)	$24.04 / giờ	$15.54 / giờ
+75%	$40.87 / giờ	$26.03 / giờ
+95%	$104.11 / giờ	$63.79 / giờ
+Mean	$46.40 / giờ	$24.96 / giờ
+o	Phân tích: Nhóm làm việc trên 84 giờ/tuần có mức lương trung vị theo giờ ($15.54/giờ) thấp hơn mặt bằng chung ($24.04/giờ), cho thấy nhiều lao động phải làm việc thêm giờ hoặc gộp nhiều công việc vì đơn giá thù lao thấp. Đối với một số ít bản ghi có PERNP rất nhỏ (
+≤$100/na˘m≤$100/na˘m
+dẫn đến thù lao theo giờ xấp xỉ 
+$0.00$0.00
+), nguyên nhân là do PERNP bao gồm cả thu nhập tự doanh ròng (SEMP) sau khi đã khấu trừ chi phí kinh doanh/nông nghiệp, hoặc là lao động làm việc không hưởng lương trong cơ sở gia đình (COW = 8 - sẽ được xem xét ở bước kiểm tra tính nhất quán).
+•	Khảo sát 3: Nhóm người lao động cao tuổi từ 85 tuổi trở lên (AGEP >= 85)
+o	Kết quả thống kê: Có 217 người (chiếm 0.15%) từ 85 tuổi trở lên vẫn có thu nhập lao động dương, với thu nhập trung vị đạt $24,000/năm (trung bình $44,095/năm, top 10% đạt trên $100,000/năm).
+o	Phân tích đối chiếu nghề nghiệp (OCCP): Kiểm tra top nghề nghiệp phổ biến nhất của nhóm này cho thấy họ làm việc trong các lĩnh vực đòi hỏi kinh nghiệm hoặc quản lý tài sản như: Môi giới bất động sản (4920 - 5.1%), Chủ/Quản lý trang trại (0205 - 4.6%), Thư ký hành chính (5740 - 4.1%), Luật sư & Thẩm phán (2100 - 3.2%), Giám đốc điều hành (0010 - 3.2%). Thời lượng làm việc trung vị là 25 giờ/tuần (bán thời gian). Điều này chứng minh đây hoàn toàn là các quan sát thực tế hợp lệ, không phải nhiễu dữ liệu.
+ 	
+
+Xử lý missing value
+2.1.1.3. Xử lý dữ liệu bị thiếu
+Dữ liệu bị thiếu (Missing Data) là hiện tượng các thuộc tính không có giá trị được ghi nhận (biểu diễn dưới dạng NaN hoặc Null), có thể gây lỗi hoặc làm sai lệch quá trình tính toán độ lợi thông tin (Information Gain) của các thuật toán phân lớp.
+a) Kiểm tra hiện trạng dữ liệu bị thiếu:
+Nhóm tiến hành quét toàn bộ 14 thuộc tính trong tập dữ liệu bằng hàm isna() để xác định số lượng và tỷ lệ bản ghi bị khuyết thiếu:
+Thuộc tính	Kiểu dữ liệu	Số dòng khuyết (isna)	Tỷ lệ khuyết (%)	Có NaN không?	Bản chất khuyết thiếu theo Census Bureau (PUMS 2024)
+ENG	float64	97,449	67.03%	Có (True)	Khuyết thiếu có cấu trúc: Bảng câu hỏi chỉ hỏi người nói ngôn ngữ khác tiếng Anh ở nhà. Người chỉ nói tiếng Anh bản ngữ mang mã b (N/A).
+FOD1P	float64	89,114	61.30%	Có (True)	Khuyết thiếu có cấu trúc: Chỉ người có bằng Cử nhân trở lên (SCHL >= 21) mới có chuyên ngành ĐH; nhóm SCHL < 21 mang mã bbbb (N/A).
+AGEP	int64	0	0.00%	Không (False)	Đầy đủ 100%
+SEX	int64	0	0.00%	Không (False)	Đầy đủ 100%
+MAR	int64	0	0.00%	Không (False)	Đầy đủ 100%
+SCHL	float64	0	0.00%	Không (False)	Đầy đủ 100%
+COW	float64	0	0.00%	Không (False)	Đầy đủ 100%
+WKWN	float64	0	0.00%	Không (False)	Đầy đủ 100%
+WKHP	float64	0	0.00%	Không (False)	Đầy đủ 100%
+OCCP	float64	0	0.00%	Không (False)	Đầy đủ 100%
+INDP	float64	0	0.00%	Không (False)	Đầy đủ 100%
+RAC1P	int64	0	0.00%	Không (False)	Đầy đủ 100%
+NATIVITY	int64	0	0.00%	Không (False)	Đầy đủ 100%
+PERNP	float64	0	0.00%	Không (False)	Đầy đủ 100% (Biến mục tiêu)
+(Chèn ảnh chụp màn hình kết quả chạy mục [1] và [2] của hàm handle_missing_values vào đây)
+________________________________________
+b) Đánh giá bản chất khuyết thiếu và Lựa chọn phương pháp xử lý:
+Qua bảng thống kê trên, 12/14 thuộc tính đạt độ phủ đầy đủ 100%. Chỉ có 2 thuộc tính xuất hiện giá trị NaN với tỷ lệ rất lớn là ENG (67.03%) và FOD1P (61.30%).
+Tuy nhiên, khi đối chiếu với Từ điển dữ liệu ACS PUMS 2024 và kiểm tra chéo bằng bảng tần suất (pd.crosstab), nhóm nhận thấy đây không phải là dữ liệu bị mất ngẫu nhiên (Missing Completely at Random - MCAR) do lỗi thu thập, mà là Dữ liệu khuyết thiếu có cấu trúc (Structural Missing / Not Applicable):
+•	Đối với ENG (Khả năng nói tiếng Anh): Trong phiếu điều tra dân số Mỹ, câu hỏi này chỉ áp dụng cho những người có sử dụng một ngôn ngữ khác ngoài tiếng Anh tại nhà. Những người bản xứ chỉ sử dụng tiếng Anh (Speaks only English) được bỏ qua câu hỏi này và gán mã khoảng trắng b (khi nạp vào pandas chuyển thành NaN).
+•	Đối với FOD1P (Chuyên ngành bằng Cử nhân): Kết quả chạy bảng chéo pd.crosstab(df["SCHL"] >= 21, df["FOD1P"].notna()) chứng minh 100% các bản ghi có SCHL < 21 (chưa tốt nghiệp Đại học) đều nhận giá trị NaN ở cột FOD1P, và 100% các bản ghi có SCHL >= 21 (từ Cử nhân trở lên) đều có mã ngành học đầy đủ.
+Đánh giá các phương pháp xử lý thông thường:
+1.	Phương pháp xóa bản ghi (Listwise Deletion): Không thể áp dụng vì sẽ làm mất hơn 67% lượng dữ liệu, đồng thời xóa sạch toàn bộ nhóm người chỉ nói tiếng Anh và nhóm lao động chưa có bằng Đại học (gây chệch mẫu nghiêm trọng - Selection Bias).
+2.	Phương pháp điền bằng giá trị phổ biến nhất (Mode Imputation): Không thể áp dụng vì nếu gán chuyên ngành Đại học phổ biến nhất (ví dụ: Quản trị kinh doanh - 6203) cho một người mới tốt nghiệp THPT (SCHL = 16), hoặc gán mức tiếng Anh ngoại ngữ cho người bản xứ sẽ tạo ra dữ liệu sai sự thật và mâu thuẫn logic.
+⇒⇒
+Quyết định phương pháp xử lý tối ưu:
+Sử dụng kỹ thuật Gán nhãn danh mục riêng cho giá trị khuyết có cấu trúc (Dedicated Category Imputation). Cụ thể, nhóm thay thế toàn bộ giá trị NaN ở hai thuộc tính này bằng mã số 0 (một mã độc lập chưa từng xuất hiện trong từ điển gốc):
+•	Tại thuộc tính ENG: Gán NaN 
+→→
+0 (Ý nghĩa: Chỉ sử dụng tiếng Anh / Tiếng Anh bản ngữ). Khi đó thang đo thứ bậc của ENG trở nên hoàn chỉnh từ 0 (Bản ngữ) 
+→→
+1 (Rất tốt) 
+→→
+2 (Tốt) 
+→→
+3 (Không tốt) 
+→→
+4 (Không biết nói).
+•	Tại thuộc tính FOD1P: Gán NaN 
+→→
+0 (Ý nghĩa: Không có chuyên ngành Đại học / Trình độ dưới Cử nhân).
+________________________________________
+c) Kết quả sau khi xử lý dữ liệu bị thiếu:
+Python
+df["ENG"] = df["ENG"].fillna(0)
+df["FOD1P"] = df["FOD1P"].fillna(0)
+(Chèn ảnh chụp kết quả kiểmd tra df.isna().sum() sau khi fillna(0) bằng 0 tuyệt đối)
+Sau khi thực hiện gán mã danh mục 0, toàn bộ 14 thuộc tính trong tập dữ liệu đã đầy đủ 100% (0 giá trị NaN), vừa bảo toàn nguyên vẹn số lượng mẫu khảo sát, vừa giữ đúng ngữ nghĩa thực tế của từng nhóm đối tượng lao động.
+
