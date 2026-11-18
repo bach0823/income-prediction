@@ -1,0 +1,5 @@
+﻿variant,model,cv_macro_f1,test_accuracy,test_macro_f1,test_macro_precision,test_macro_recall,best_params
+A_detailed,RandomForest,0.6955271808043388,0.7014789326162751,0.698193365593248,0.6991017658647783,0.698000543465214,"{""max_features"": ""sqrt"", ""min_samples_leaf"": 5, ""n_estimators"": 100}"
+B_grouped,RandomForest,0.6908906387190606,0.6959186928879065,0.6926835991782833,0.6936947751856626,0.6924013769473459,"{""max_features"": ""sqrt"", ""min_samples_leaf"": 5, ""n_estimators"": 100}"
+A_detailed,CART,0.6739022245251008,0.6793063373060183,0.67381300421432,0.6735175179592844,0.6746143909078134,"{""max_depth"": null, ""min_samples_leaf"": 100}"
+B_grouped,CART,0.6716264854698109,0.6752500968484378,0.6706513574224081,0.6709548826675059,0.670923123408413,"{""max_depth"": null, ""min_samples_leaf"": 100}"
